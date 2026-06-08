@@ -12,7 +12,15 @@ from .models import (
     SessionStep,
     SessionStatus,
 )
-from .schemas import EvidenceCreate, HuntSessionCreate, PlaybookCreate, SessionStepUpdate
+from .schemas import (
+    EvidenceCreate,
+    EvidenceUpdate,
+    HuntSessionCreate,
+    HuntSessionUpdate,
+    PlaybookCreate,
+    PlaybookUpdate,
+    SessionStepUpdate,
+)
 
 
 def list_playbooks(db: Session) -> list[Playbook]:
@@ -68,6 +76,51 @@ def create_playbook(db: Session, payload: PlaybookCreate) -> Playbook:
     return get_playbook(db, playbook.id)
 
 
+def update_playbook(db: Session, playbook_id: int, payload: PlaybookUpdate) -> Playbook:
+    playbook = get_playbook(db, playbook_id)
+    duplicate = db.query(Playbook).filter(Playbook.slug == payload.slug, Playbook.id != playbook_id).first()
+    if duplicate:
+        raise HTTPException(status_code=409, detail="Playbook slug already exists")
+
+    for key, value in payload.model_dump(exclude={"steps", "queries"}).items():
+        setattr(playbook, key, value)
+
+    playbook.steps.clear()
+    playbook.queries.clear()
+    db.flush()
+
+    for index, step in enumerate(payload.steps, start=1):
+        playbook.steps.append(
+            PlaybookStep(
+                position=index,
+                title=step["title"],
+                instruction=step["instruction"],
+            )
+        )
+
+    for query in payload.queries:
+        playbook.queries.append(
+            PlaybookQuery(
+                platform=query["platform"],
+                query=query["query"],
+            )
+        )
+
+    db.commit()
+    return get_playbook(db, playbook.id)
+
+
+def delete_playbook(db: Session, playbook_id: int) -> None:
+    playbook = get_playbook(db, playbook_id)
+    if db.query(HuntSession).filter(HuntSession.playbook_id == playbook_id).first():
+        raise HTTPException(
+            status_code=409,
+            detail="Playbook has hunt sessions. Delete those sessions before deleting the playbook.",
+        )
+    db.delete(playbook)
+    db.commit()
+
+
 def start_session(db: Session, payload: HuntSessionCreate) -> HuntSession:
     playbook = get_playbook(db, payload.playbook_id)
     session = HuntSession(
@@ -93,6 +146,22 @@ def start_session(db: Session, payload: HuntSessionCreate) -> HuntSession:
 
     db.commit()
     return get_session(db, session.id)
+
+
+def update_session(db: Session, session_id: int, payload: HuntSessionUpdate) -> HuntSession:
+    session = get_session(db, session_id)
+    session.title = payload.title
+    session.analyst = payload.analyst
+    session.scope = payload.scope
+    session.status = payload.status
+    db.commit()
+    return get_session(db, session.id)
+
+
+def delete_session(db: Session, session_id: int) -> None:
+    session = get_session(db, session_id)
+    db.delete(session)
+    db.commit()
 
 
 def list_sessions(db: Session) -> list[HuntSession]:
@@ -144,6 +213,26 @@ def add_evidence(db: Session, session_id: int, payload: EvidenceCreate) -> Evide
     db.commit()
     db.refresh(evidence)
     return evidence
+
+
+def update_evidence(db: Session, evidence_id: int, payload: EvidenceUpdate) -> EvidenceItem:
+    evidence = db.query(EvidenceItem).filter(EvidenceItem.id == evidence_id).first()
+    if not evidence:
+        raise HTTPException(status_code=404, detail="Evidence not found")
+    evidence.title = payload.title
+    evidence.note = payload.note
+    evidence.artifact_ref = payload.artifact_ref
+    db.commit()
+    db.refresh(evidence)
+    return evidence
+
+
+def delete_evidence(db: Session, evidence_id: int) -> None:
+    evidence = db.query(EvidenceItem).filter(EvidenceItem.id == evidence_id).first()
+    if not evidence:
+        raise HTTPException(status_code=404, detail="Evidence not found")
+    db.delete(evidence)
+    db.commit()
 
 
 def coverage(db: Session) -> list[dict[str, str | int]]:

@@ -8,10 +8,13 @@ from .schemas import (
     CoverageItem,
     EvidenceCreate,
     EvidenceRead,
+    EvidenceUpdate,
     HuntSessionCreate,
     HuntSessionRead,
+    HuntSessionUpdate,
     PlaybookCreate,
     PlaybookRead,
+    PlaybookUpdate,
     SessionStepRead,
     SessionStepUpdate,
 )
@@ -20,12 +23,18 @@ from .services import (
     add_evidence,
     coverage,
     create_playbook,
+    delete_evidence,
+    delete_playbook,
+    delete_session,
     get_playbook,
     get_session,
     list_playbooks,
     list_sessions,
     render_markdown_report,
     start_session,
+    update_evidence,
+    update_playbook,
+    update_session,
     update_session_step,
 )
 
@@ -69,6 +78,17 @@ def api_create_playbook(payload: PlaybookCreate, db: Session = Depends(get_db)):
     return create_playbook(db, payload)
 
 
+@app.put("/playbooks/{playbook_id}", response_model=PlaybookRead)
+def api_update_playbook(playbook_id: int, payload: PlaybookUpdate, db: Session = Depends(get_db)):
+    return update_playbook(db, playbook_id, payload)
+
+
+@app.delete("/playbooks/{playbook_id}", status_code=204)
+def api_delete_playbook(playbook_id: int, db: Session = Depends(get_db)) -> Response:
+    delete_playbook(db, playbook_id)
+    return Response(status_code=204)
+
+
 @app.get("/playbooks/{playbook_id}", response_model=PlaybookRead)
 def api_get_playbook(playbook_id: int, db: Session = Depends(get_db)):
     return get_playbook(db, playbook_id)
@@ -89,6 +109,17 @@ def api_get_session(session_id: int, db: Session = Depends(get_db)):
     return get_session(db, session_id)
 
 
+@app.patch("/sessions/{session_id}", response_model=HuntSessionRead)
+def api_update_session(session_id: int, payload: HuntSessionUpdate, db: Session = Depends(get_db)):
+    return update_session(db, session_id, payload)
+
+
+@app.delete("/sessions/{session_id}", status_code=204)
+def api_delete_session(session_id: int, db: Session = Depends(get_db)) -> Response:
+    delete_session(db, session_id)
+    return Response(status_code=204)
+
+
 @app.patch("/session-steps/{step_id}", response_model=SessionStepRead)
 def api_update_session_step(
     step_id: int, payload: SessionStepUpdate, db: Session = Depends(get_db)
@@ -99,6 +130,17 @@ def api_update_session_step(
 @app.post("/sessions/{session_id}/evidence", response_model=EvidenceRead, status_code=201)
 def api_add_evidence(session_id: int, payload: EvidenceCreate, db: Session = Depends(get_db)):
     return add_evidence(db, session_id, payload)
+
+
+@app.patch("/evidence/{evidence_id}", response_model=EvidenceRead)
+def api_update_evidence(evidence_id: int, payload: EvidenceUpdate, db: Session = Depends(get_db)):
+    return update_evidence(db, evidence_id, payload)
+
+
+@app.delete("/evidence/{evidence_id}", status_code=204)
+def api_delete_evidence(evidence_id: int, db: Session = Depends(get_db)) -> Response:
+    delete_evidence(db, evidence_id)
+    return Response(status_code=204)
 
 
 @app.get("/coverage", response_model=list[CoverageItem])

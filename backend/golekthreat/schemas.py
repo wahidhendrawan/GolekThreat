@@ -38,6 +38,10 @@ class PlaybookCreate(BaseModel):
     queries: list[dict[str, str]] = []
 
 
+class PlaybookUpdate(PlaybookCreate):
+    pass
+
+
 class PlaybookRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -64,6 +68,13 @@ class HuntSessionCreate(BaseModel):
     scope: str = "Not defined"
 
 
+class HuntSessionUpdate(BaseModel):
+    title: str
+    analyst: str
+    scope: str
+    status: SessionStatus
+
+
 class SessionStepUpdate(BaseModel):
     status: StepStatus
     notes: str = ""
@@ -84,6 +95,10 @@ class EvidenceCreate(BaseModel):
     title: str
     note: str
     artifact_ref: str = ""
+
+
+class EvidenceUpdate(EvidenceCreate):
+    pass
 
 
 class EvidenceRead(BaseModel):

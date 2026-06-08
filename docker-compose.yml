@@ -6,7 +6,7 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-golekpass}
       POSTGRES_DB: ${POSTGRES_DB:-golekthreat}
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -31,7 +31,7 @@ services:
     build:
       context: ./frontend
       args:
-        VITE_API_URL: http://localhost:${API_PORT:-8000}
+        VITE_API_URL: /api
     ports:
       - "${FRONTEND_PORT:-3000}:80"
     depends_on:

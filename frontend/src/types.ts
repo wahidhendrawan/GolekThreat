@@ -11,6 +11,7 @@ export type Playbook = {
   expected_evidence: string;
   false_positives: string;
   response: string;
+  created_at: string;
   steps: { id: number; position: number; title: string; instruction: string }[];
   queries: { id: number; platform: string; query: string }[];
 };
