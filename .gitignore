@@ -11,3 +11,5 @@ postgres_data/
 coverage/
 *.log
 *.db
+*.egg-info/
+*.tsbuildinfo
