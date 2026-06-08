@@ -13,3 +13,8 @@ coverage/
 *.db
 *.egg-info/
 *.tsbuildinfo
+.coverage
+.ruff_cache/
+.mypy_cache/
+htmlcov/
+*.sqlite

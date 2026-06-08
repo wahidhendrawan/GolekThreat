@@ -1,25 +1,39 @@
 # GolekThreat
 
-GolekThreat is a threat hunting playbook engine for turning hypotheses into repeatable hunts, evidence trails, ATT&CK coverage, and analyst-ready reports.
+GolekThreat is a threat hunting management console for building hunt playbooks,
+mapping them to MITRE ATT&CK, running repeatable hunt sessions, tracking evidence,
+and producing analyst-ready Markdown reports.
 
 The name combines **Golek** (Javanese/Indonesian for "search") with threat hunting.
 
-## Features
+## What It Does
 
-- Playbook library for structured threat hunt hypotheses.
-- Hunt session runner with step status tracking.
-- Evidence notes tied to hunt sessions and playbook steps.
-- MITRE ATT&CK tactic/technique coverage summary.
-- Markdown report generation for analyst handoff.
-- Docker Compose stack with React, FastAPI, and PostgreSQL.
+- Manage threat hunting playbooks with hypothesis, severity, data sources, expected evidence, false positives, response guidance, steps, and starter queries.
+- Map playbooks to MITRE ATT&CK Enterprise techniques using a generated catalog from official ATT&CK STIX data.
+- Run hunt sessions as task-like work items with status, analyst, scope, progress, step notes, and evidence logs.
+- Add, edit, and delete evidence tied to hunt sessions.
+- Track ATT&CK coverage across the playbook library.
+- Generate Markdown reports for analyst handoff.
+- Run as a Docker Compose stack with React, FastAPI, Nginx, and PostgreSQL.
+
+## Screens
+
+- **Playbook Management**: create, edit, delete, and map hunt playbooks.
+- **Hunt Tasks**: start hunts from playbooks and manage running/completed/archived sessions.
+- **Evidence Log**: record findings, artifacts, and analyst judgement.
+- **ATT&CK Coverage**: review techniques covered by the hunt library.
 
 ## Architecture
 
 ```text
-frontend/   React + Vite + TypeScript
-backend/    FastAPI + SQLAlchemy + PostgreSQL
-postgres    PostgreSQL 16 container
+Browser
+  -> frontend: React + Vite served by Nginx
+  -> /api proxy: Nginx forwards API requests
+  -> api: FastAPI + SQLAlchemy
+  -> postgres: PostgreSQL 16
 ```
+
+See [docs/architecture.md](docs/architecture.md) for more detail.
 
 ## Quick Start
 
@@ -32,20 +46,36 @@ Open:
 
 - Web UI: http://localhost:3000
 - API docs: http://localhost:8000/docs
+- API health through frontend proxy: http://localhost:3000/api/health
 
-The API seeds sample playbooks automatically on startup.
+The API seeds sample playbooks automatically when the database is empty.
 
-## Local Backend
+## Configuration
+
+Environment variables are documented in [.env.example](.env.example).
+
+Default ports:
+
+- Frontend: `3000`
+- API: `8000`
+- PostgreSQL host port: `5433`
+
+The frontend uses a same-origin `/api` proxy in Docker so it works from
+`localhost`, LAN IPs, and remote browser sessions without rebuilding for each host.
+
+## Development
+
+Backend:
 
 ```bash
 cd backend
 python -m venv .venv
-.venv\Scripts\activate
+. .venv/bin/activate
 pip install -e ".[dev]"
 uvicorn golekthreat.main:app --reload
 ```
 
-## Local Frontend
+Frontend:
 
 ```bash
 cd frontend
@@ -53,20 +83,56 @@ npm install
 npm run dev
 ```
 
+Tests and build checks:
+
+```bash
+cd backend
+pytest
+
+cd ../frontend
+npm run build
+```
+
+## MITRE ATT&CK Catalog
+
+The frontend MITRE catalog is generated from official MITRE ATT&CK Enterprise
+STIX data. The generated file is checked in so the app works offline and builds
+without downloading ATT&CK data.
+
+Regenerate it with:
+
+```bash
+python scripts/generate_mitre_catalog.py
+```
+
+Source: https://github.com/mitre-attack/attack-stix-data
+
 ## Core Data Model
 
-- `playbooks`: hunt hypothesis, severity, tactic, technique, data sources, expected evidence, false positives, response recommendations.
+- `playbooks`: hunt hypothesis, severity, ATT&CK mapping, data sources, expected evidence, false positives, response recommendations.
 - `playbook_steps`: ordered investigation steps.
-- `playbook_queries`: Sigma, KQL, SPL, EQL, or Wazuh queries.
+- `playbook_queries`: Sigma, KQL, SPL, EQL, Wazuh, or other query starters.
 - `hunt_sessions`: execution instances created from playbooks.
-- `session_steps`: per-step execution status.
-- `evidence_items`: analyst evidence notes and artifact references.
+- `session_steps`: per-step execution status and analyst notes.
+- `evidence_items`: evidence notes and artifact references tied to sessions.
 
 ## Roadmap
 
 - User authentication and RBAC.
 - Playbook import/export as YAML.
-- Sigma skeleton generation from confirmed hunt findings.
-- HTML/PDF report exports.
-- Redis worker for long-running report and enrichment jobs.
-- Integrations with Detection-Rules and ThreatDock.
+- Organization/workspace support.
+- Report export to HTML/PDF.
+- Detection rule attachment and validation workflows.
+- Integrations with SIEM/EDR query APIs.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
+
+## Security
+
+See [SECURITY.md](SECURITY.md) for vulnerability reporting guidance.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
