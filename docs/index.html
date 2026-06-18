@@ -6,40 +6,128 @@
 <meta name="description" content="Threat hunting playbook engine for repeatable hunts, evidence tracking, ATT&CK coverage, and analyst-ready reports.">
 <title>GolekThreat | Threat Hunting Playbook Engine</title>
 <style>
+:root{--accent:#f59e0b;--accent-dim:#f59e0b20;--bg:#0a0e1a;--surface:#111827;--border:#1f2937;--text:#f1f5f9;--muted:#94a3b8}
 *{margin:0;padding:0;box-sizing:border-box}
-body{font-family:system-ui,-apple-system,sans-serif;background:#0f172a;color:#e2e8f0;line-height:1.6}
-.hero{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2rem;text-align:center;background:linear-gradient(135deg,#0f172a 0%,#1e293b 50%,#0f172a 100%)}
-.badge{display:inline-block;padding:.4rem 1rem;background:#f59e0b20;color:#f59e0b;border:1px solid #f59e0b40;border-radius:20px;font-size:.85rem;margin-bottom:1.5rem}
-h1{font-size:clamp(2.5rem,6vw,4rem);margin-bottom:1rem;background:linear-gradient(135deg,#f59e0b,#fbbf24);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
-.lead{font-size:1.25rem;color:#94a3b8;max-width:600px;margin-bottom:2.5rem}
-.features{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.5rem;max-width:800px;margin:3rem auto;padding:0 1rem}
-.feature{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:1.5rem;text-align:left}
-.feature h3{color:#f59e0b;margin-bottom:.5rem;font-size:1rem}
-.feature p{color:#94a3b8;font-size:.9rem}
-.actions{display:flex;gap:1rem;flex-wrap:wrap;justify-content:center}
-.btn{display:inline-block;padding:.75rem 2rem;border-radius:8px;text-decoration:none;font-weight:600;font-size:1rem;transition:transform .15s}
-.btn:hover{transform:translateY(-2px)}
-.btn-primary{background:#f59e0b;color:#0f172a}
-.btn-secondary{background:#1e293b;color:#e2e8f0;border:1px solid #334155}
-footer{text-align:center;padding:2rem;color:#64748b;font-size:.85rem;border-top:1px solid #1e293b}
+body{font-family:Inter,system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);line-height:1.7;overflow-x:hidden}
+a{color:inherit;text-decoration:none}
+
+/* Nav */
+nav{position:fixed;top:0;width:100%;padding:1rem 2rem;display:flex;align-items:center;justify-content:space-between;backdrop-filter:blur(20px);background:rgba(10,14,26,.8);border-bottom:1px solid var(--border);z-index:100}
+.logo{font-weight:700;font-size:1.1rem;display:flex;align-items:center;gap:.5rem}
+.logo-icon{width:32px;height:32px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.8rem;color:var(--bg)}
+.nav-links{display:flex;gap:2rem}
+.nav-links a{color:var(--muted);font-size:.9rem;transition:color .2s}
+.nav-links a:hover{color:var(--text)}
+
+/* Hero */
+.hero{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:8rem 2rem 4rem;position:relative}
+.hero::before{content:'';position:absolute;top:-50%;left:-50%;width:200%;height:200%;background:radial-gradient(ellipse at 50% 0%,var(--accent-dim) 0%,transparent 60%);pointer-events:none}
+.hero-content{max-width:900px;text-align:center;position:relative}
+.chip{display:inline-flex;align-items:center;gap:.5rem;padding:.5rem 1.2rem;background:var(--accent-dim);border:1px solid var(--accent);border-radius:100px;font-size:.8rem;color:var(--accent);margin-bottom:2rem;font-weight:500}
+.hero h1{font-size:clamp(2.8rem,7vw,4.5rem);font-weight:800;letter-spacing:-.02em;margin-bottom:1.5rem;line-height:1.1}
+.hero h1 span{background:linear-gradient(135deg,var(--accent),#fbbf24,#f97316);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero p{font-size:1.2rem;color:var(--muted);max-width:600px;margin:0 auto 2.5rem}
+.btn-group{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+.btn{padding:.85rem 2rem;border-radius:10px;font-weight:600;font-size:.95rem;transition:all .2s}
+.btn-primary{background:var(--accent);color:var(--bg);box-shadow:0 4px 20px rgba(245,158,11,.3)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(245,158,11,.4)}
+.btn-ghost{border:1px solid var(--border);color:var(--text)}
+.btn-ghost:hover{border-color:var(--muted);background:var(--surface)}
+
+/* Terminal */
+.terminal{margin:4rem auto 0;max-width:650px;background:#0d1117;border:1px solid var(--border);border-radius:12px;overflow:hidden;text-align:left;box-shadow:0 20px 60px rgba(0,0,0,.5)}
+.terminal-bar{display:flex;gap:6px;padding:12px 16px;background:#161b22;border-bottom:1px solid var(--border)}
+.terminal-bar span{width:12px;height:12px;border-radius:50%}
+.terminal-bar span:nth-child(1){background:#ff5f57}
+.terminal-bar span:nth-child(2){background:#ffbd2e}
+.terminal-bar span:nth-child(3){background:#28c840}
+.terminal pre{padding:1.2rem 1.5rem;font-family:'JetBrains Mono',monospace;font-size:.82rem;color:#c9d1d9;line-height:1.8;overflow-x:auto}
+.terminal .prompt{color:#7ee787}
+.terminal .flag{color:#79c0ff}
+.terminal .output{color:#8b949e}
+
+/* Features */
+.features{padding:6rem 2rem;max-width:1100px;margin:0 auto}
+.features h2{text-align:center;font-size:2.2rem;margin-bottom:.5rem}
+.features .subtitle{text-align:center;color:var(--muted);margin-bottom:3rem}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1.5rem}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:2rem;transition:all .3s}
+.card:hover{border-color:var(--accent);transform:translateY(-4px);box-shadow:0 12px 40px rgba(245,158,11,.1)}
+.card-icon{width:44px;height:44px;background:var(--accent-dim);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;margin-bottom:1rem}
+.card h3{font-size:1.05rem;margin-bottom:.5rem}
+.card p{color:var(--muted);font-size:.9rem}
+
+/* Stats */
+.stats{padding:4rem 2rem;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.stats-grid{display:flex;justify-content:center;gap:4rem;flex-wrap:wrap;max-width:800px;margin:0 auto}
+.stat{text-align:center}
+.stat strong{display:block;font-size:2.5rem;color:var(--accent)}
+.stat span{color:var(--muted);font-size:.85rem}
+
+/* Footer */
+footer{padding:3rem 2rem;text-align:center;color:var(--muted);font-size:.85rem}
+footer a{color:var(--accent)}
+
+@media(max-width:768px){.nav-links{display:none}.stats-grid{gap:2rem}}
 </style>
 </head>
 <body>
-<section class="hero">
-<span class="badge">🎯 Threat Hunting Engine</span>
-<h1>GolekThreat</h1>
-<p class="lead">Repeatable threat hunting playbooks with evidence tracking, MITRE ATT&CK coverage analysis, and analyst-ready reports for security operations teams.</p>
-<div class="actions">
-<a class="btn btn-primary" href="https://github.com/wahidhendrawan/GolekThreat">View on GitHub</a>
-<a class="btn btn-secondary" href="https://github.com/wahidhendrawan/GolekThreat#readme">Documentation</a>
+<nav>
+<div class="logo"><div class="logo-icon">GT</div>GolekThreat</div>
+<div class="nav-links">
+<a href="#features">Features</a>
+<a href="#demo">Demo</a>
+<a href="https://github.com/wahidhendrawan/GolekThreat">GitHub</a>
 </div>
-<div class="features">
-<div class="feature"><h3>Playbook Engine</h3><p>Define repeatable hunt hypotheses with structured steps, data sources, and expected outcomes.</p></div>
-<div class="feature"><h3>Evidence Tracking</h3><p>Capture findings, artifacts, and IOCs during hunts with full audit trail.</p></div>
-<div class="feature"><h3>ATT&CK Coverage</h3><p>Visualize technique coverage gaps and prioritize hunts by adversary behavior.</p></div>
-<div class="feature"><h3>Reports</h3><p>Generate analyst-ready reports with findings, recommendations, and metrics.</p></div>
+</nav>
+
+<section class="hero">
+<div class="hero-content">
+<div class="chip">🎯 Open Source Threat Hunting</div>
+<h1>Hunt threats with <span>repeatable playbooks</span></h1>
+<p>Structure your threat hunts with hypotheses, evidence tracking, MITRE ATT&CK coverage mapping, and analyst-ready reports that drive real security outcomes.</p>
+<div class="btn-group">
+<a class="btn btn-primary" href="https://github.com/wahidhendrawan/GolekThreat">Get Started</a>
+<a class="btn btn-ghost" href="https://github.com/wahidhendrawan/GolekThreat#readme">Read Docs</a>
+</div>
+<div class="terminal" id="demo">
+<div class="terminal-bar"><span></span><span></span><span></span></div>
+<pre><span class="prompt">$</span> golekthreat hunt <span class="flag">--playbook</span> lateral-movement.yml
+<span class="output">
+[▸] Loading playbook: Lateral Movement via RDP
+[▸] Hypothesis: Adversary uses compromised creds for RDP
+[▸] Data sources: Windows Security 4624, Sysmon 3
+[✓] 3 suspicious RDP sessions found
+[✓] Evidence captured → hunt-2026-0617.json
+[▸] ATT&CK: T1021.001 coverage updated</span></pre>
+</div>
 </div>
 </section>
-<footer>GolekThreat — Open source under GPL-3.0 · Built for blue teams</footer>
+
+<section class="stats">
+<div class="stats-grid">
+<div class="stat"><strong>ATT&CK</strong><span>Full technique mapping</span></div>
+<div class="stat"><strong>YAML</strong><span>Playbook definitions</span></div>
+<div class="stat"><strong>JSON</strong><span>Evidence export</span></div>
+<div class="stat"><strong>PDF</strong><span>Analyst reports</span></div>
+</div>
+</section>
+
+<section class="features" id="features">
+<h2>Built for hunters</h2>
+<p class="subtitle">Everything you need to run structured, repeatable threat hunts.</p>
+<div class="grid">
+<div class="card"><div class="card-icon">📋</div><h3>Playbook Engine</h3><p>Define hypotheses, data sources, queries, and expected outcomes in structured YAML playbooks.</p></div>
+<div class="card"><div class="card-icon">🔍</div><h3>Evidence Tracking</h3><p>Capture IOCs, artifacts, timelines, and analyst notes with full provenance chain.</p></div>
+<div class="card"><div class="card-icon">🗺️</div><h3>ATT&CK Coverage</h3><p>Visualize which techniques you've hunted, identify gaps, and prioritize next hunts.</p></div>
+<div class="card"><div class="card-icon">📊</div><h3>Reports</h3><p>Generate management-ready reports with findings, risk scores, and recommendations.</p></div>
+<div class="card"><div class="card-icon">🔄</div><h3>Repeatable</h3><p>Run the same hunt across environments and time periods with consistent methodology.</p></div>
+<div class="card"><div class="card-icon">🤝</div><h3>Team Collaboration</h3><p>Share playbooks, assign hunts, and track team coverage metrics together.</p></div>
+</div>
+</section>
+
+<footer>
+<p>GolekThreat is open source under the <a href="https://github.com/wahidhendrawan/GolekThreat/blob/main/LICENSE">GPL-3.0 license</a>. Built by <a href="https://github.com/wahidhendrawan">Wahid Hendrawan</a>.</p>
+</footer>
 </body>
 </html>
