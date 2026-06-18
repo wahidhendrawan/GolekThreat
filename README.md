@@ -2,6 +2,11 @@
 
 # GolekThreat
 
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL-3.0-blue.svg)](https://github.com/wahidhendrawan/GolekThreat/blob/main/LICENSE)
+[![Release](https://img.shields.io/badge/release-v1.0.0-green.svg)](https://github.com/wahidhendrawan/GolekThreat/releases)
+[![CI](https://github.com/wahidhendrawan/GolekThreat/actions/workflows/ci.yml/badge.svg)](https://github.com/wahidhendrawan/GolekThreat/actions)
+[![Pages](https://img.shields.io/badge/docs-🌐-orange.svg)](https://wahidhendrawan.github.io/GolekThreat/)
+
 GolekThreat is a threat hunting management console for building hunt playbooks,
 mapping them to MITRE ATT&CK, running repeatable hunt sessions, tracking evidence,
 and producing analyst-ready Markdown reports.
