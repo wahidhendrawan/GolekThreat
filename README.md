@@ -1,3 +1,5 @@
+[![CI](https://github.com/wahidhendrawan/GolekThreat/actions/workflows/ci.yml/badge.svg)](https://github.com/wahidhendrawan/GolekThreat/actions/workflows/ci.yml)
+
 # GolekThreat
 
 GolekThreat is a threat hunting management console for building hunt playbooks,
