@@ -47,3 +47,18 @@ export type CoverageItem = {
   technique: string;
   playbook_count: number;
 };
+
+export type MitreTechnique = {
+  tactic: string;
+  technique_id: string;
+  technique: string;
+  description: string;
+  platforms: string[];
+  url: string;
+  data_sources: string;
+  expected_evidence: string;
+  false_positives: string;
+  response: string;
+  steps: string[];
+  queries: string[];
+};

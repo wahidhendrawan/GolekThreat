@@ -16,9 +16,8 @@ import {
 import { StrictMode, type FormEvent, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { api, type PlaybookPayload } from "./api";
-import { mitreCatalog } from "./mitreCatalog";
 import "./styles.css";
-import type { CoverageItem, HuntSession, Playbook } from "./types";
+import type { CoverageItem, HuntSession, MitreTechnique, Playbook } from "./types";
 
 type StepStatus = HuntSession["steps"][number]["status"];
 type SessionStatus = HuntSession["status"];
@@ -70,6 +69,8 @@ function App() {
   const [evidenceDrafts, setEvidenceDrafts] = useState<Record<number, typeof evidence>>({});
   const [playbookForm, setPlaybookForm] = useState(emptyPlaybook);
   const [mitreFilter, setMitreFilter] = useState("");
+  const [mitreCatalog, setMitreCatalog] = useState<MitreTechnique[]>([]);
+  const [mitreLoading, setMitreLoading] = useState(true);
 
   const load = async () => {
     setLoading(true);
@@ -105,6 +106,14 @@ function App() {
 
   useEffect(() => {
     void load();
+  }, []);
+
+  useEffect(() => {
+    fetch("/mitreCatalog.json")
+      .then((res) => res.json())
+      .then((data) => setMitreCatalog(data as MitreTechnique[]))
+      .catch(() => console.error("Failed to load MITRE catalog"))
+      .finally(() => setMitreLoading(false));
   }, []);
 
   const selectedSession = useMemo(
@@ -384,8 +393,8 @@ function App() {
                 <Search size={16} />
                 <input value={mitreFilter} onChange={(event) => setMitreFilter(event.target.value)} placeholder="Search MITRE tactic or technique" />
               </div>
-              <select value={playbookForm.technique_id} onChange={(event) => applyMitreTechnique(event.target.value)} required>
-                <option value="">Select ATT&CK technique</option>
+              <select value={playbookForm.technique_id} onChange={(event) => applyMitreTechnique(event.target.value)} required disabled={mitreLoading}>
+                <option value="">{mitreLoading ? "Loading MITRE catalog..." : "Select ATT&CK technique"}</option>
                 {playbookForm.technique_id && !filteredMitreCatalog.some((item) => item.technique_id === playbookForm.technique_id) && (
                   <option value={playbookForm.technique_id}>
                     {playbookForm.technique_id} - {playbookForm.technique} ({playbookForm.tactic})
