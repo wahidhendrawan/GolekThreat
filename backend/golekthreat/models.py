@@ -58,7 +58,9 @@ class PlaybookStep(Base):
     __tablename__ = "playbook_steps"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    playbook_id: Mapped[int] = mapped_column(ForeignKey("playbooks.id", ondelete="CASCADE"))
+    playbook_id: Mapped[int] = mapped_column(
+        ForeignKey("playbooks.id", ondelete="CASCADE"), index=True
+    )
     position: Mapped[int] = mapped_column(Integer)
     title: Mapped[str] = mapped_column(String(200))
     instruction: Mapped[str] = mapped_column(Text)
@@ -70,7 +72,9 @@ class PlaybookQuery(Base):
     __tablename__ = "playbook_queries"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    playbook_id: Mapped[int] = mapped_column(ForeignKey("playbooks.id", ondelete="CASCADE"))
+    playbook_id: Mapped[int] = mapped_column(
+        ForeignKey("playbooks.id", ondelete="CASCADE"), index=True
+    )
     platform: Mapped[str] = mapped_column(String(60))
     query: Mapped[str] = mapped_column(Text)
 
@@ -81,7 +85,7 @@ class HuntSession(Base):
     __tablename__ = "hunt_sessions"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    playbook_id: Mapped[int] = mapped_column(ForeignKey("playbooks.id"))
+    playbook_id: Mapped[int] = mapped_column(ForeignKey("playbooks.id"), index=True)
     title: Mapped[str] = mapped_column(String(220))
     analyst: Mapped[str] = mapped_column(String(120), default="Unassigned")
     scope: Mapped[str] = mapped_column(Text, default="Not defined")
@@ -101,7 +105,9 @@ class SessionStep(Base):
     __tablename__ = "session_steps"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    session_id: Mapped[int] = mapped_column(ForeignKey("hunt_sessions.id", ondelete="CASCADE"))
+    session_id: Mapped[int] = mapped_column(
+        ForeignKey("hunt_sessions.id", ondelete="CASCADE"), index=True
+    )
     playbook_step_id: Mapped[int] = mapped_column(ForeignKey("playbook_steps.id"))
     position: Mapped[int] = mapped_column(Integer)
     title: Mapped[str] = mapped_column(String(200))
@@ -116,7 +122,9 @@ class EvidenceItem(Base):
     __tablename__ = "evidence_items"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    session_id: Mapped[int] = mapped_column(ForeignKey("hunt_sessions.id", ondelete="CASCADE"))
+    session_id: Mapped[int] = mapped_column(
+        ForeignKey("hunt_sessions.id", ondelete="CASCADE"), index=True
+    )
     title: Mapped[str] = mapped_column(String(200))
     artifact_ref: Mapped[str] = mapped_column(String(500), default="")
     note: Mapped[str] = mapped_column(Text)
