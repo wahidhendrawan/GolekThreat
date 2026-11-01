@@ -26,7 +26,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Generate stack secrets
+        run: |
+          echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
+          echo "GOLEK_API_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
       - name: Build and start stack
         run: docker compose up -d --build
@@ -34,7 +39,7 @@ jobs:
       - name: Wait for API
         run: |
           for i in $(seq 1 60); do
-            if curl -fsS http://localhost:8000/health >/dev/null 2>&1; then
+            if curl -fsS http://localhost:3000/api/health >/dev/null 2>&1; then
               echo "API ready after ${i}s"
               exit 0
             fi
@@ -60,10 +65,12 @@ jobs:
       - name: Smoke check - API endpoints
         run: |
           echo "=== Health ==="
-          curl -fsS http://localhost:8000/health
+          curl -fsS http://localhost:3000/api/health
           echo ""
+          echo "=== Playbooks without token must be 401 ==="
+          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3000/api/playbooks)" = 401
           echo "=== Playbooks list ==="
-          curl -fsS http://localhost:8000/playbooks | head -c 300
+          curl -fsS -H "Authorization: Bearer $GOLEK_API_TOKEN" http://localhost:3000/api/playbooks | head -c 300
           echo ""
 
       - name: Dump logs on failure

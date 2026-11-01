@@ -1,6 +1,6 @@
 version: 2
 updates:
-  - package-ecosystem: python
+  - package-ecosystem: pip
     directory: /backend
     schedule:
       interval: weekly
@@ -25,7 +25,12 @@ updates:
         dependency-type: development
 
   - package-ecosystem: docker
-    directory: /
+    directory: /backend
+    schedule:
+      interval: monthly
+
+  - package-ecosystem: docker
+    directory: /frontend
     schedule:
       interval: monthly
 
@@ -33,3 +38,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: monthly

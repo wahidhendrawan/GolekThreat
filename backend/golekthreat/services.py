@@ -57,8 +57,8 @@ def create_playbook(db: Session, payload: PlaybookCreate) -> Playbook:
             PlaybookStep(
                 playbook_id=playbook.id,
                 position=index,
-                title=step["title"],
-                instruction=step["instruction"],
+                title=step.title,
+                instruction=step.instruction,
             )
         )
 
@@ -66,8 +66,8 @@ def create_playbook(db: Session, payload: PlaybookCreate) -> Playbook:
         db.add(
             PlaybookQuery(
                 playbook_id=playbook.id,
-                platform=query["platform"],
-                query=query["query"],
+                platform=query.platform,
+                query=query.query,
             )
         )
 
@@ -93,16 +93,16 @@ def update_playbook(db: Session, playbook_id: int, payload: PlaybookUpdate) -> P
         playbook.steps.append(
             PlaybookStep(
                 position=index,
-                title=step["title"],
-                instruction=step["instruction"],
+                title=step.title,
+                instruction=step.instruction,
             )
         )
 
     for query in payload.queries:
         playbook.queries.append(
             PlaybookQuery(
-                platform=query["platform"],
-                query=query["query"],
+                platform=query.platform,
+                query=query.query,
             )
         )
 

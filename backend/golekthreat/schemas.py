@@ -22,6 +22,16 @@ class PlaybookQueryRead(BaseModel):
     query: str
 
 
+class PlaybookStepCreate(BaseModel):
+    title: str
+    instruction: str
+
+
+class PlaybookQueryCreate(BaseModel):
+    platform: str
+    query: str
+
+
 class PlaybookCreate(BaseModel):
     slug: str
     title: str
@@ -34,8 +44,8 @@ class PlaybookCreate(BaseModel):
     expected_evidence: str
     false_positives: str
     response: str
-    steps: list[dict[str, str]]
-    queries: list[dict[str, str]] = []
+    steps: list[PlaybookStepCreate]
+    queries: list[PlaybookQueryCreate] = []
 
 
 class PlaybookUpdate(PlaybookCreate):

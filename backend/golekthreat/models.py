@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 
 from sqlalchemy import DateTime, Enum as SqlEnum, ForeignKey, Integer, String, Text
@@ -43,7 +43,9 @@ class Playbook(Base):
     expected_evidence: Mapped[str] = mapped_column(Text)
     false_positives: Mapped[str] = mapped_column(Text)
     response: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
 
     steps: Mapped[list["PlaybookStep"]] = relationship(
         back_populates="playbook", cascade="all, delete-orphan", order_by="PlaybookStep.position"
@@ -90,7 +92,9 @@ class HuntSession(Base):
     analyst: Mapped[str] = mapped_column(String(120), default="Unassigned")
     scope: Mapped[str] = mapped_column(Text, default="Not defined")
     status: Mapped[SessionStatus] = mapped_column(SqlEnum(SessionStatus), default=SessionStatus.running)
-    started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
 
     playbook: Mapped[Playbook] = relationship(back_populates="sessions")
     steps: Mapped[list["SessionStep"]] = relationship(
@@ -128,6 +132,8 @@ class EvidenceItem(Base):
     title: Mapped[str] = mapped_column(String(200))
     artifact_ref: Mapped[str] = mapped_column(String(500), default="")
     note: Mapped[str] = mapped_column(Text)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
 
     session: Mapped[HuntSession] = relationship(back_populates="evidence")

@@ -1,26 +1,33 @@
 # Security Policy
 
-## Supported Versions
+## Supported versions
 
-GolekThreat is currently pre-1.0. Security fixes are applied to the `main`
-branch.
+Only the latest release of GolekThreat gets security fixes. Please check that the problem still exists there before reporting.
 
-## Reporting a Vulnerability
+## Reporting a vulnerability
 
-Please do not open a public issue for sensitive vulnerabilities.
+Report privately through GitHub: **Security → Report a vulnerability** on this repository ([direct link](https://github.com/wahidhendrawan/GolekThreat/security/advisories/new)). Do not open a public issue, discussion or pull request, and do not post exploit details or credentials anywhere public.
 
-Report privately by contacting the repository owner through GitHub. Include:
+Please include:
 
-- Affected component and version or commit.
-- Reproduction steps.
-- Impact and expected security boundary.
-- Any suggested remediation.
+- the version or commit you tested, and how you deployed it (Docker Compose, bare metal)
+- the smallest steps or input that reproduce the problem
+- what an attacker gains (data exposure, code execution, privilege escalation, denial of service, …)
 
-For non-sensitive hardening suggestions, open a normal GitHub issue.
+Remove real credentials, customer data and sensitive logs from any evidence you share.
 
-## Operational Notes
+You should get a first reply within 7 days. Fixed issues are credited in the release notes unless you ask otherwise.
 
-- The MVP does not include authentication or RBAC.
-- Do not expose the app directly to the internet without adding authentication,
-  TLS termination, and deployment hardening.
-- Do not store real secrets in playbook notes, evidence, or `.env` files.
+## In scope
+
+- Authentication bypass or token exposure
+- Injection (SQL, command) or stored XSS through playbooks, sessions or evidence
+- Data exposure through the API or generated reports
+
+## Out of scope
+
+- Accuracy of hunting playbooks or ATT&CK mappings: open a normal issue
+
+## Safe harbor
+
+Good-faith research that follows this policy will not be treated as a violation of the license or of this policy. Only test against your own deployment, access no more data than needed to show the issue, and do not degrade services for other people.
