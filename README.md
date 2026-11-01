@@ -1,10 +1,9 @@
-[![CI](https://github.com/wahidhendrawan/GolekThreat/actions/workflows/ci.yml/badge.svg)](https://github.com/wahidhendrawan/GolekThreat/actions/workflows/ci.yml)
-
 # GolekThreat 🔍
 
-[![License: GPL-3.0](https://img.shields.io/badge/License-GPL-3.0-blue.svg)](https://github.com/wahidhendrawan/GolekThreat/blob/main/LICENSE)
-[![Release](https://img.shields.io/badge/release-v1.0.0-green.svg)](https://github.com/wahidhendrawan/GolekThreat/releases)
-[![CI](https://github.com/wahidhendrawan/GolekThreat/actions/workflows/ci.yml/badge.svg)](https://github.com/wahidhendrawan/GolekThreat/actions)
+[![CI](https://github.com/wahidhendrawan/GolekThreat/actions/workflows/ci.yml/badge.svg)](https://github.com/wahidhendrawan/GolekThreat/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/wahidhendrawan/GolekThreat?sort=semver)](https://github.com/wahidhendrawan/GolekThreat/releases/latest)
+[![License](https://img.shields.io/github/license/wahidhendrawan/GolekThreat)](LICENSE)
+[![OpenSSF Scorecard](https://api.scorecard.dev/projects/github.com/wahidhendrawan/GolekThreat/badge)](https://scorecard.dev/viewer/?uri=github.com/wahidhendrawan/GolekThreat)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/)
 [![Docker](https://img.shields.io/badge/docker-compose%20ready-2496ED?logo=docker&logoColor=white)](docker-compose.yml)
 [![React](https://img.shields.io/badge/frontend-React%2018-61DAFB?logo=react)](frontend/)
@@ -33,7 +32,6 @@ The name combines **Golek** (Javanese/Indonesian for "search") with threat hunti
 | **🗺️ MITRE ATT&CK** | Generated catalog from official STIX data — map playbooks to techniques and track coverage |
 | **📊 ATT&CK Navigator Export** | Export coverage to MITRE ATT&CK Navigator JSON for visual gap analysis |
 | **📄 Report Generation** | Markdown reports for analyst handoff with findings and evidence |
-| **⏰ Scheduled Hunts** | Cron-style automation for recurring hunt jobs with configurable schedules |
 | **🐳 Docker Ready** | Full stack: React + FastAPI + Nginx + PostgreSQL 16 — one `docker compose up` |
 
 ---
@@ -47,7 +45,6 @@ The name combines **Golek** (Javanese/Indonesian for "search") with threat hunti
 - Track ATT&CK coverage across the playbook library.
 - Generate Markdown reports for analyst handoff.
 - **Export ATT&CK Navigator JSON** for visual gap analysis and coverage review.
-- **Schedule recurring hunts** with cron-style automation.
 - Run as a Docker Compose stack with React, FastAPI, Nginx, and PostgreSQL.
 
 ## 📸 Screenshots
@@ -58,7 +55,6 @@ The name combines **Golek** (Javanese/Indonesian for "search") with threat hunti
 | **Hunt Tasks** | Start hunts from playbooks and manage running/completed/archived sessions |
 | **Evidence Log** | Record findings, artifacts, and analyst judgement with severity scoring |
 | **ATT&CK Coverage** | Visual coverage map of techniques covered by the hunt library |
-| **Scheduled Hunt Dashboard** | Manage recurring hunt schedules and view execution history |
 
 ---
 
@@ -66,11 +62,10 @@ The name combines **Golek** (Javanese/Indonesian for "search") with threat hunti
 
 ```text
 Browser
-  -> frontend: React + Vite served by Nginx (Port 3000)
+  -> frontend: React + Vite served by unprivileged Nginx (host port 3000)
   -> /api proxy: Nginx forwards API requests
-  -> api: FastAPI + SQLAlchemy (Port 8000)
-  -> postgres: PostgreSQL 16 (Port 5433)
-  -> scheduler: Cron-style hunt scheduler (built-in)
+  -> api: FastAPI + SQLAlchemy (internal port 8000, bearer token required)
+  -> postgres: PostgreSQL 16 (internal only)
 ```
 
 See [docs/architecture.md](docs/architecture.md) for more detail.
@@ -79,13 +74,13 @@ See [docs/architecture.md](docs/architecture.md) for more detail.
 
 ```bash
 cp .env.example .env
+# Set GOLEK_API_TOKEN and POSTGRES_PASSWORD in .env, e.g. with openssl rand -hex 32
 docker compose up --build
 ```
 
 Open:
 
-- Web UI: http://localhost:3000
-- API docs: http://localhost:8000/docs
+- Web UI: http://localhost:3000 (asks once per browser session for the API token)
 - API health through frontend proxy: http://localhost:3000/api/health
 
 The API seeds sample playbooks automatically when the database is empty.
@@ -94,11 +89,14 @@ The API seeds sample playbooks automatically when the database is empty.
 
 Environment variables are documented in [.env.example](.env.example).
 
-Default ports:
-
-- Frontend: `3000`
-- API: `8000`
-- PostgreSQL host port: `5433`
+- `GOLEK_API_TOKEN` (required, at least 16 characters): shared bearer token for
+  every API route except `/health`. The API refuses to start without it.
+- `POSTGRES_PASSWORD` (required): database password. Compose builds the API's
+  `DATABASE_URL` from `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB`, so use
+  URL-safe characters. PostgreSQL only applies it when the volume is first created;
+  for an existing volume, keep the old password or change it with `ALTER USER`.
+- `FRONTEND_PORT` (default `3000`): the only published host port. The API and
+  PostgreSQL are reachable only on the Compose network.
 
 The frontend uses a same-origin `/api` proxy in Docker so it works from
 `localhost`, LAN IPs, and remote browser sessions without rebuilding for each host.
@@ -112,8 +110,13 @@ cd backend
 python -m venv .venv
 . .venv/bin/activate
 pip install -e ".[dev]"
+export GOLEK_API_TOKEN="$(openssl rand -hex 32)"
 uvicorn golekthreat.main:app --reload
 ```
+
+Docker and CI install the hash-pinned `backend/requirements.txt` /
+`backend/requirements-dev.txt`, generated from `pyproject.toml` by `pip-compile`
+on Python 3.12 (the exact command is in each file's header).
 
 Frontend:
 
@@ -135,23 +138,32 @@ npm run build
 
 ## 📡 API Overview
 
+Every route except `/health` requires `Authorization: Bearer <GOLEK_API_TOKEN>`;
+requests without a valid token get `401`. Through the Docker stack, prefix paths with `/api`.
+
+```bash
+curl -H "Authorization: Bearer $GOLEK_API_TOKEN" http://localhost:3000/api/playbooks
+```
+
 | Method | Endpoint | Auth | Description |
 |---|---|---|---|
-| GET | `/api/health` | No | API health check |
-| GET | `/api/playbooks` | No | List all playbooks |
-| POST | `/api/playbooks` | Yes | Create playbook |
-| GET | `/api/playbooks/:id` | No | Get playbook + steps + queries |
-| PUT | `/api/playbooks/:id` | Yes | Update playbook |
-| DELETE | `/api/playbooks/:id` | Yes | Delete playbook |
-| GET | `/api/hunt-sessions` | No | List hunt sessions |
-| POST | `/api/hunt-sessions` | Yes | Create hunt session from playbook |
-| GET | `/api/hunt-sessions/:id` | No | Get session with evidence |
-| PUT | `/api/hunt-sessions/:id` | Yes | Update session status/progress |
-| POST | `/api/evidence` | Yes | Add evidence item |
-| DELETE | `/api/evidence/:id` | Yes | Delete evidence |
-| GET | `/api/coverage` | No | ATT&CK coverage stats |
-| GET | `/api/coverage/navigator` | No | Export ATT&CK Navigator JSON |
-| GET | `/api/reports/:id/markdown` | Yes | Generate Markdown report |
+| GET | `/health` | No | API health check |
+| GET | `/playbooks` | Yes | List all playbooks |
+| POST | `/playbooks` | Yes | Create playbook |
+| GET | `/playbooks/{id}` | Yes | Get playbook + steps + queries |
+| PUT | `/playbooks/{id}` | Yes | Update playbook |
+| DELETE | `/playbooks/{id}` | Yes | Delete playbook |
+| GET | `/sessions` | Yes | List hunt sessions |
+| POST | `/sessions` | Yes | Start hunt session from playbook |
+| GET | `/sessions/{id}` | Yes | Get session with steps and evidence |
+| PATCH | `/sessions/{id}` | Yes | Update session title/analyst/scope/status |
+| DELETE | `/sessions/{id}` | Yes | Delete session |
+| PATCH | `/session-steps/{id}` | Yes | Update step status and notes |
+| POST | `/sessions/{id}/evidence` | Yes | Add evidence item |
+| PATCH | `/evidence/{id}` | Yes | Update evidence |
+| DELETE | `/evidence/{id}` | Yes | Delete evidence |
+| GET | `/coverage` | Yes | ATT&CK coverage stats |
+| GET | `/sessions/{id}/report.md` | Yes | Markdown report |
 
 ## MITRE ATT&CK Catalog
 
@@ -182,7 +194,8 @@ Source: https://github.com/mitre-attack/attack-stix-data
 - ✅ MITRE ATT&CK catalog with Navigator export.
 - ✅ Hunt session management with evidence tracking.
 - ✅ Markdown report generation.
-- ⬜ User authentication and RBAC.
+- ✅ Shared API token authentication.
+- ⬜ Per-user accounts and RBAC.
 - ⬜ Playbook import/export as YAML.
 - ⬜ Scheduled hunt automation with cron backend.
 - ⬜ Report export to HTML/PDF.

@@ -2,25 +2,40 @@ import type { CoverageItem, HuntSession, Playbook } from "./types";
 
 const API_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(/\/$/, "");
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+const TOKEN_KEY = "golekthreat.apiToken";
+
+function apiToken(): string {
+  let token = sessionStorage.getItem(TOKEN_KEY);
+  if (!token) {
+    token = window.prompt("GolekThreat API token (GOLEK_API_TOKEN)")?.trim() ?? "";
+    if (token) sessionStorage.setItem(TOKEN_KEY, token);
+  }
+  return token;
+}
+
+async function send(path: string, init?: RequestInit, retry = true): Promise<Response> {
+  const token = apiToken();
   const response = await fetch(`${API_URL}${path}`, {
-    headers: { "Content-Type": "application/json", ...init?.headers },
     ...init,
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...init?.headers },
   });
+  if (response.status === 401 && retry) {
+    // Only forget the token this request used, so parallel 401s prompt once.
+    if (sessionStorage.getItem(TOKEN_KEY) === token) sessionStorage.removeItem(TOKEN_KEY);
+    return send(path, init, false);
+  }
   if (!response.ok) {
     throw new Error(`API request failed: ${response.status}`);
   }
-  return response.json() as Promise<T>;
+  return response;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  return (await send(path, init)).json() as Promise<T>;
 }
 
 async function requestEmpty(path: string, init?: RequestInit): Promise<void> {
-  const response = await fetch(`${API_URL}${path}`, {
-    headers: { "Content-Type": "application/json", ...init?.headers },
-    ...init,
-  });
-  if (!response.ok) {
-    throw new Error(`API request failed: ${response.status}`);
-  }
+  await send(path, init);
 }
 
 export type PlaybookPayload = Omit<Playbook, "id" | "created_at" | "steps" | "queries"> & {
@@ -86,5 +101,5 @@ export const api = {
     requestEmpty(`/evidence/${evidenceId}`, {
       method: "DELETE",
     }),
-  reportUrl: (sessionId: number) => `${API_URL}/sessions/${sessionId}/report.md`,
+  report: async (sessionId: number) => (await send(`/sessions/${sessionId}/report.md`)).text(),
 };

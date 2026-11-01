@@ -1,12 +1,10 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:0cefaabd882e42bcb2a2f3dc56d3ce4770560ba62fd7f197f1a2e008fd5731ab
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-golek}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-golekpass}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
       POSTGRES_DB: ${POSTGRES_DB:-golekthreat}
-    ports:
-      - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -19,10 +17,9 @@ services:
     build:
       context: ./backend
     environment:
-      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://golek:golekpass@postgres:5432/golekthreat}
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-golek}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-golekthreat}
+      GOLEK_API_TOKEN: ${GOLEK_API_TOKEN:?set GOLEK_API_TOKEN in .env}
       CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
-    ports:
-      - "${API_PORT:-8000}:8000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -33,7 +30,7 @@ services:
       args:
         VITE_API_URL: /api
     ports:
-      - "${FRONTEND_PORT:-3000}:80"
+      - "${FRONTEND_PORT:-3000}:8080"
     depends_on:
       - api
 

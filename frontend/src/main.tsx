@@ -214,6 +214,21 @@ function App() {
     }));
   };
 
+  // The report needs the Authorization header, so fetch it and save it instead of linking to it.
+  const downloadReport = async (sessionId: number) => {
+    await run(
+      "report",
+      async () => {
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(new Blob([await api.report(sessionId)], { type: "text/markdown" }));
+        link.download = `golekthreat-session-${sessionId}.md`;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(link.href), 0);
+      },
+      "Report downloaded.",
+    );
+  };
+
   const savePlaybook = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     await run(
@@ -536,10 +551,10 @@ function App() {
                   <strong>{completedSteps}/{selectedSession.steps.length}</strong>
                   <span>steps touched</span>
                 </div>
-                <a href={api.reportUrl(selectedSession.id)} target="_blank" rel="noreferrer" className="button secondary inline">
+                <button type="button" className="button secondary inline" onClick={() => void downloadReport(selectedSession.id)} disabled={busy === "report"}>
                   <FileText size={16} />
                   Report
-                </a>
+                </button>
               </div>
 
               <div className="step-list">

@@ -3,7 +3,7 @@
 ## Start the Stack
 
 ```bash
-cp .env.example .env
+cp .env.example .env  # then set GOLEK_API_TOKEN and POSTGRES_PASSWORD
 docker compose up --build
 ```
 
@@ -18,8 +18,8 @@ docker compose logs --tail=200 --no-color api frontend
 ## Health Checks
 
 ```bash
-curl http://localhost:8000/health
 curl http://localhost:3000/api/health
+curl -H "Authorization: Bearer $GOLEK_API_TOKEN" http://localhost:3000/api/playbooks
 ```
 
 ## Database Access
@@ -39,10 +39,9 @@ docker compose up --build
 
 ## Production Hardening Checklist
 
-- Add authentication and RBAC.
+- Add per-user accounts and RBAC (the API uses one shared bearer token).
 - Put the app behind TLS.
 - Use managed PostgreSQL or persistent encrypted volumes.
-- Rotate database passwords and remove default credentials.
-- Restrict API and database ports at the network layer.
+- Rotate `GOLEK_API_TOKEN` and the database password.
 - Configure backups and recovery testing.
 - Add audit logging for playbook/session/evidence changes.

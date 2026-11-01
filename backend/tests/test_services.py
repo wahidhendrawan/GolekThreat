@@ -1,12 +1,7 @@
-from collections.abc import Generator
-
 import pytest
 from fastapi import HTTPException
-from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import StaticPool
+from sqlalchemy.orm import Session
 
-from golekthreat.db import Base
 from golekthreat.schemas import (
     EvidenceCreate,
     EvidenceUpdate,
@@ -32,22 +27,6 @@ from golekthreat.services import (
     update_session_step,
 )
 from golekthreat.models import SessionStatus, StepStatus
-
-
-@pytest.fixture()
-def db() -> Generator[Session, None, None]:
-    engine = create_engine(
-        "sqlite://",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool,
-    )
-    Base.metadata.create_all(bind=engine)
-    TestingSessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
-    session = TestingSessionLocal()
-    try:
-        yield session
-    finally:
-        session.close()
 
 
 def playbook_payload(slug: str = "gt-test-playbook") -> PlaybookCreate:
