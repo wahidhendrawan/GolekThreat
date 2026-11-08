@@ -148,8 +148,9 @@ small a role gets `403`. Through the Docker stack, prefix paths with `/api`.
 
 Roles: **viewer** reads everything; **analyst** also runs hunts (creates and edits
 playbooks, sessions, steps and evidence, deletes sessions and evidence); **admin** also
-deletes playbooks and manages users. Passwords are scrypt-hashed, tokens are stored hashed
-and revoked by `POST /auth/logout` or by deleting the user.
+deletes playbooks and manages users. Passwords are scrypt-hashed, tokens are stored hashed,
+expire after 30 days, and are revoked by `POST /auth/logout` or by deleting the user. Ten
+failed logins lock a username for 15 minutes (`429` with `Retry-After`).
 
 ```bash
 curl -H "Authorization: Bearer $GOLEK_API_TOKEN" http://localhost:3000/api/playbooks
@@ -182,6 +183,18 @@ TOKEN=$(curl -s -X POST http://localhost:3000/api/auth/login -H 'Content-Type: a
 | DELETE | `/evidence/{id}` | analyst | Delete evidence |
 | GET | `/coverage` | viewer | ATT&CK coverage stats |
 | GET | `/sessions/{id}/report.md` | viewer | Markdown report |
+
+## Import rules from Detection-Rules
+
+`scripts/sync_detection_rules.py` turns the Sigma rules of
+[Detection-Rules](https://github.com/wahidhendrawan/Detection-Rules) into playbooks, one per
+rule, with the Sigma detection block as the hunt query:
+
+```bash
+python scripts/sync_detection_rules.py --push http://localhost:3000/api --token "$GOLEK_API_TOKEN"
+```
+
+Slugs are `dr-<rule id>`, so re-running skips rules that already exist (`409`).
 
 ## MITRE ATT&CK Catalog
 

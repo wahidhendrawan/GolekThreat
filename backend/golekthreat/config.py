@@ -13,7 +13,7 @@ class Settings(BaseSettings):
     @classmethod
     def _empty_password_means_unset(cls, value: object) -> object:
         # Compose passes the variable through even when .env leaves it blank.
-        return None if value == "" else value
+        return None if isinstance(value, str) and not value.strip() else value
 
     database_url: str = "sqlite:///./golekthreat.db"
     cors_origins: str = "http://localhost:3000,http://127.0.0.1:3000"

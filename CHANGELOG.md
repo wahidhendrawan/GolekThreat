@@ -4,6 +4,13 @@ All notable changes to GolekThreat are documented here.
 
 ## Unreleased
 
+- Fixed: editing a playbook that already had hunt sessions failed on PostgreSQL (foreign key
+  from `session_steps.playbook_step_id`); the column is dropped automatically at startup.
+- Login is rate limited (10 failures lock a username for 15 minutes) and user tokens expire
+  after 30 days. Request fields now have size limits matching the database columns, and
+  steps, queries and evidence refuse empty titles and bodies.
+- `scripts/sync_detection_rules.py` now emits valid `POST /playbooks` bodies and can push
+  them with `--push`.
 - Added user accounts with viewer, analyst and admin roles: `POST /auth/login` issues a
   bearer token, `POST /auth/logout` revokes it, admins manage users under `/users`, and
   the web UI signs in with a username and password. The first admin comes from

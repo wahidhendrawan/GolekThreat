@@ -149,7 +149,6 @@ class SessionStep(Base):
     session_id: Mapped[int] = mapped_column(
         ForeignKey("hunt_sessions.id", ondelete="CASCADE"), index=True
     )
-    playbook_step_id: Mapped[int] = mapped_column(ForeignKey("playbook_steps.id"))
     position: Mapped[int] = mapped_column(Integer)
     title: Mapped[str] = mapped_column(String(200))
     instruction: Mapped[str] = mapped_column(Text)

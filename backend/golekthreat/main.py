@@ -1,16 +1,21 @@
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from .auth import (
     Principal,
     authenticate,
     bootstrap_admin,
+    clear_login_failures,
     create_user,
     current_principal,
     issue_token,
+    locked_until,
+    record_login_failure,
     require_role,
     revoke_token,
 )
@@ -57,9 +62,17 @@ from .services import (
 )
 
 
+def drop_legacy_columns(bind=engine) -> None:
+    """session_steps.playbook_step_id (removed) made every playbook edit fail once a hunt ran."""
+    if "playbook_step_id" in {c["name"] for c in inspect(bind).get_columns("session_steps")}:
+        with bind.begin() as conn:
+            conn.execute(text("ALTER TABLE session_steps DROP COLUMN playbook_step_id"))
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     Base.metadata.create_all(bind=engine)
+    drop_legacy_columns()
     db = SessionLocal()
     try:
         seed_playbooks(db)
@@ -112,9 +125,19 @@ def health() -> dict[str, str]:
 
 @app.post("/auth/login", response_model=LoginResponse)
 def api_login(payload: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse:
+    locked = locked_until(payload.username)
+    if locked:
+        retry_after = max(1, int((locked - datetime.now(UTC)).total_seconds()))
+        raise HTTPException(
+            status_code=429,
+            detail="Too many failed logins, try again later",
+            headers={"Retry-After": str(retry_after)},
+        )
     user = authenticate(db, payload.username, payload.password)
     if user is None:
+        record_login_failure(payload.username)
         raise HTTPException(status_code=401, detail="Invalid username or password")
+    clear_login_failures(payload.username)
     return LoginResponse(token=issue_token(db, user), username=user.username, role=user.role)
 
 

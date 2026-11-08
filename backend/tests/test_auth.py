@@ -1,6 +1,7 @@
 """User accounts, login tokens and role checks; the shared API token stays an admin."""
 
 from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -136,6 +137,48 @@ def test_logout_revokes_only_that_token(client: TestClient, users: dict, db: Ses
     )
 
 
+def test_login_locks_after_repeated_failures(client: TestClient, users: dict) -> None:
+    auth._failed_logins.clear()
+    bad = {"username": "viewer", "password": "wrong-password-1"}
+    for _ in range(auth.LOCKOUT_FAILURES):
+        assert client.post("/auth/login", json=bad).status_code == 401
+    locked = client.post("/auth/login", json={"username": "viewer", "password": PASSWORD})
+    assert locked.status_code == 429 and int(locked.headers["retry-after"]) > 0
+    assert (
+        client.post("/auth/login", json={"username": "analyst", "password": PASSWORD}).status_code
+        == 200
+    )  # others unaffected
+
+    auth._failed_logins["viewer"] = [
+        datetime.now(UTC) - auth.LOCKOUT_WINDOW - timedelta(seconds=1)
+    ] * 20
+    assert (
+        client.post("/auth/login", json={"username": "viewer", "password": PASSWORD}).status_code
+        == 200
+    )  # window passed
+    assert "viewer" not in auth._failed_logins  # success clears the counter
+    assert (
+        client.post("/auth/login", json={"username": "viewer", "password": "x" * 257}).status_code
+        == 422
+    )
+
+
+def test_tokens_expire_after_30_days(client: TestClient, users: dict, db: Session) -> None:
+    old = db.query(UserToken).join(User).filter(User.username == "viewer").one()
+    old_id = old.id
+    old.created_at = datetime.now(UTC) - auth.TOKEN_MAX_AGE - timedelta(seconds=1)
+    db.commit()
+    assert client.get("/auth/me", headers=users["viewer"]).status_code == 401
+    assert db.query(UserToken).filter(UserToken.id == old_id).count() == 0  # expired token removed
+
+    stale = db.query(UserToken).join(User).filter(User.username == "analyst").one()
+    stale_id = stale.id
+    stale.created_at = datetime.now(UTC) - auth.TOKEN_MAX_AGE - timedelta(days=1)
+    db.commit()
+    _login(client, "admin")  # any login sweeps expired tokens
+    assert db.query(UserToken).filter(UserToken.id == stale_id).count() == 0
+
+
 def test_user_management_is_admin_only(client: TestClient, users: dict, db: Session) -> None:
     for headers in (users["viewer"], users["analyst"]):
         assert client.get("/users", headers=headers).status_code == 403
@@ -183,6 +226,8 @@ def test_blank_admin_password_means_no_bootstrap(monkeypatch: pytest.MonkeyPatch
     from golekthreat.config import Settings
 
     monkeypatch.setenv("GOLEK_ADMIN_PASSWORD", "")
+    assert Settings(_env_file=None).golek_admin_password is None
+    monkeypatch.setenv("GOLEK_ADMIN_PASSWORD", "   ")
     assert Settings(_env_file=None).golek_admin_password is None
     monkeypatch.setenv("GOLEK_ADMIN_PASSWORD", "short")
     with pytest.raises(ValueError):

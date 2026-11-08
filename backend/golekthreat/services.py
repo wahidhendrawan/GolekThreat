@@ -78,7 +78,9 @@ def create_playbook(db: Session, payload: PlaybookCreate) -> Playbook:
 
 def update_playbook(db: Session, playbook_id: int, payload: PlaybookUpdate) -> Playbook:
     playbook = get_playbook(db, playbook_id)
-    duplicate = db.query(Playbook).filter(Playbook.slug == payload.slug, Playbook.id != playbook_id).first()
+    duplicate = (
+        db.query(Playbook).filter(Playbook.slug == payload.slug, Playbook.id != playbook_id).first()
+    )
     if duplicate:
         raise HTTPException(status_code=409, detail="Playbook slug already exists")
 
@@ -137,7 +139,6 @@ def start_session(db: Session, payload: HuntSessionCreate) -> HuntSession:
         db.add(
             SessionStep(
                 session_id=session.id,
-                playbook_step_id=step.id,
                 position=step.position,
                 title=step.title,
                 instruction=step.instruction,
@@ -236,8 +237,8 @@ def delete_evidence(db: Session, evidence_id: int) -> None:
 
 
 def coverage(db: Session) -> list[dict[str, str | int]]:
-    playbooks = db.query(Playbook).all()
-    counter = Counter((item.tactic, item.technique_id, item.technique) for item in playbooks)
+    rows = db.query(Playbook.tactic, Playbook.technique_id, Playbook.technique).all()
+    counter = Counter(tuple(row) for row in rows)
     return [
         {
             "tactic": tactic,
@@ -250,10 +251,13 @@ def coverage(db: Session) -> list[dict[str, str | int]]:
 
 
 def render_markdown_report(session: HuntSession) -> str:
-    evidence = "\n".join(
-        f"- **{item.title}**: {item.note} ({item.artifact_ref or 'no artifact reference'})"
-        for item in session.evidence
-    ) or "- No evidence recorded."
+    evidence = (
+        "\n".join(
+            f"- **{item.title}**: {item.note} ({item.artifact_ref or 'no artifact reference'})"
+            for item in session.evidence
+        )
+        or "- No evidence recorded."
+    )
     steps = "\n".join(
         f"- [{step.status.value}] **{step.title}** - {step.notes or step.instruction}"
         for step in session.steps

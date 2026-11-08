@@ -9,7 +9,7 @@ import hashlib
 import hmac
 import secrets
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -21,6 +21,12 @@ from .models import Role, User, UserToken
 
 ROLE_RANK = {Role.viewer: 0, Role.analyst: 1, Role.admin: 2}
 SCRYPT = {"n": 2**14, "r": 8, "p": 1}
+TOKEN_MAX_AGE = timedelta(days=30)
+LOCKOUT_FAILURES = 10
+LOCKOUT_WINDOW = timedelta(minutes=15)
+# shortcut: failed-login memory lives in this process; fine for the single API container Compose
+# runs, move it to the database if the API ever runs as several replicas
+_failed_logins: dict[str, list[datetime]] = {}
 # Verified when the user does not exist, so a login attempt takes the same time either way.
 _DUMMY_HASH = None
 
@@ -64,9 +70,40 @@ def authenticate(db: Session, username: str, password: str) -> User | None:
     return user if verify_password(password, user.password_hash) else None
 
 
+def locked_until(username: str) -> datetime | None:
+    """When the username is locked after too many recent failed logins, else None."""
+    now = datetime.now(UTC)
+    recent = [t for t in _failed_logins.get(username, []) if now - t < LOCKOUT_WINDOW]
+    if recent:
+        _failed_logins[username] = recent
+    else:
+        _failed_logins.pop(username, None)
+    if len(recent) >= LOCKOUT_FAILURES:
+        return recent[-1] + LOCKOUT_WINDOW
+    return None
+
+
+def record_login_failure(username: str) -> None:
+    if len(_failed_logins) > 10_000:  # a spray of made-up usernames must not grow memory forever
+        for name in list(_failed_logins):
+            locked_until(name)
+    _failed_logins.setdefault(username, []).append(datetime.now(UTC))
+
+
+def clear_login_failures(username: str) -> None:
+    _failed_logins.pop(username, None)
+
+
+def _as_utc(value: datetime) -> datetime:
+    # SQLite hands back naive datetimes, PostgreSQL aware ones.
+    return value if value.tzinfo else value.replace(tzinfo=UTC)
+
+
 def issue_token(db: Session, user: User) -> str:
+    now = datetime.now(UTC)
+    db.query(UserToken).filter(UserToken.created_at < now - TOKEN_MAX_AGE).delete()
     token = secrets.token_urlsafe(32)
-    db.add(UserToken(user_id=user.id, token_hash=token_hash(token), created_at=datetime.now(UTC)))
+    db.add(UserToken(user_id=user.id, token_hash=token_hash(token), created_at=now))
     db.commit()
     return token
 
@@ -112,6 +149,9 @@ def current_principal(
     digest = token_hash(token)
     row = db.query(UserToken).filter(UserToken.token_hash == digest).first()
     if row is None:
+        raise _unauthorized()
+    if datetime.now(UTC) - _as_utc(row.created_at) > TOKEN_MAX_AGE:
+        revoke_token(db, digest)
         raise _unauthorized()
     return Principal(
         username=row.user.username, role=row.user.role, user_id=row.user.id, token_hash=digest

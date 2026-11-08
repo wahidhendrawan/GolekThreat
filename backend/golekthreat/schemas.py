@@ -4,10 +4,13 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .models import Role, SessionStatus, Severity, StepStatus
 
+TEXT = 20_000  # notes, instructions and similar free text
+QUERY = 50_000
+
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
+    username: str = Field(max_length=80)
+    password: str = Field(max_length=256)
 
 
 class LoginResponse(BaseModel):
@@ -54,29 +57,29 @@ class PlaybookQueryRead(BaseModel):
 
 
 class PlaybookStepCreate(BaseModel):
-    title: str
-    instruction: str
+    title: str = Field(min_length=1, max_length=200)
+    instruction: str = Field(min_length=1, max_length=TEXT)
 
 
 class PlaybookQueryCreate(BaseModel):
-    platform: str
-    query: str
+    platform: str = Field(min_length=1, max_length=60)
+    query: str = Field(min_length=1, max_length=QUERY)
 
 
 class PlaybookCreate(BaseModel):
-    slug: str
-    title: str
-    hypothesis: str
+    slug: str = Field(min_length=1, max_length=120)
+    title: str = Field(min_length=1, max_length=200)
+    hypothesis: str = Field(min_length=1, max_length=TEXT)
     severity: Severity = Severity.medium
-    tactic: str
-    technique: str
-    technique_id: str
-    data_sources: str
-    expected_evidence: str
-    false_positives: str
-    response: str
-    steps: list[PlaybookStepCreate]
-    queries: list[PlaybookQueryCreate] = []
+    tactic: str = Field(min_length=1, max_length=120)
+    technique: str = Field(min_length=1, max_length=160)
+    technique_id: str = Field(min_length=1, max_length=40)
+    data_sources: str = Field(min_length=1, max_length=TEXT)
+    expected_evidence: str = Field(min_length=1, max_length=TEXT)
+    false_positives: str = Field(min_length=1, max_length=TEXT)
+    response: str = Field(min_length=1, max_length=TEXT)
+    steps: list[PlaybookStepCreate] = Field(max_length=200)
+    queries: list[PlaybookQueryCreate] = Field(default=[], max_length=200)
 
 
 class PlaybookUpdate(PlaybookCreate):
@@ -105,20 +108,20 @@ class PlaybookRead(BaseModel):
 
 class HuntSessionCreate(BaseModel):
     playbook_id: int
-    analyst: str = "Unassigned"
-    scope: str = "Not defined"
+    analyst: str = Field(default="Unassigned", max_length=120)
+    scope: str = Field(default="Not defined", max_length=TEXT)
 
 
 class HuntSessionUpdate(BaseModel):
-    title: str
-    analyst: str
-    scope: str
+    title: str = Field(min_length=1, max_length=220)
+    analyst: str = Field(max_length=120)
+    scope: str = Field(max_length=TEXT)
     status: SessionStatus
 
 
 class SessionStepUpdate(BaseModel):
     status: StepStatus
-    notes: str = ""
+    notes: str = Field(default="", max_length=TEXT)
 
 
 class SessionStepRead(BaseModel):
@@ -133,9 +136,9 @@ class SessionStepRead(BaseModel):
 
 
 class EvidenceCreate(BaseModel):
-    title: str
-    note: str
-    artifact_ref: str = ""
+    title: str = Field(min_length=1, max_length=200)
+    note: str = Field(min_length=1, max_length=TEXT)
+    artifact_ref: str = Field(default="", max_length=500)
 
 
 class EvidenceUpdate(EvidenceCreate):
