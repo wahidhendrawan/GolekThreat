@@ -32,6 +32,7 @@ jobs:
         run: |
           echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
           echo "GOLEK_API_TOKEN=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+          echo "GOLEK_ADMIN_PASSWORD=$(openssl rand -hex 16)" >> "$GITHUB_ENV"
 
       - name: Build and start stack
         run: docker compose up -d --build
@@ -72,6 +73,14 @@ jobs:
           echo "=== Playbooks list ==="
           curl -fsS -H "Authorization: Bearer $GOLEK_API_TOKEN" http://localhost:3000/api/playbooks | head -c 300
           echo ""
+          echo "=== Sign in with the bootstrap admin ==="
+          TOKEN=$(curl -fsS -X POST http://localhost:3000/api/auth/login \
+            -H 'Content-Type: application/json' \
+            -d "{\"username\":\"admin\",\"password\":\"$GOLEK_ADMIN_PASSWORD\"}" \
+            | python3 -c 'import json, sys; print(json.load(sys.stdin)["token"])')
+          test "$(curl -fsS -H "Authorization: Bearer $TOKEN" http://localhost:3000/api/auth/me)" = '{"username":"admin","role":"admin"}'
+          echo "=== Wrong password must be 401 ==="
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' -d '{"username":"admin","password":"definitely-wrong-password"}')" = 401
 
       - name: Dump logs on failure
         if: failure()

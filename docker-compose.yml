@@ -19,6 +19,8 @@ services:
     environment:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-golek}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@postgres:5432/${POSTGRES_DB:-golekthreat}
       GOLEK_API_TOKEN: ${GOLEK_API_TOKEN:?set GOLEK_API_TOKEN in .env}
+      GOLEK_ADMIN_USERNAME: ${GOLEK_ADMIN_USERNAME:-admin}
+      GOLEK_ADMIN_PASSWORD: ${GOLEK_ADMIN_PASSWORD:-}
       CORS_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
     depends_on:
       postgres:

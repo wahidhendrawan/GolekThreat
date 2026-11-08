@@ -2,27 +2,59 @@ import type { CoverageItem, HuntSession, Playbook } from "./types";
 
 const API_URL = (import.meta.env.VITE_API_URL ?? "/api").replace(/\/$/, "");
 
-const TOKEN_KEY = "golekthreat.apiToken";
+const SESSION_KEY = "golekthreat.session";
+export const UNAUTHORIZED_EVENT = "golekthreat:unauthorized";
 
-function apiToken(): string {
-  let token = sessionStorage.getItem(TOKEN_KEY);
-  if (!token) {
-    token = window.prompt("GolekThreat API token (GOLEK_API_TOKEN)")?.trim() ?? "";
-    if (token) sessionStorage.setItem(TOKEN_KEY, token);
-  }
-  return token;
+export type Session = { token: string; username: string; role: "viewer" | "analyst" | "admin" };
+
+export function storedSession(): Session | null {
+  const raw = sessionStorage.getItem(SESSION_KEY);
+  return raw ? (JSON.parse(raw) as Session) : null;
 }
 
-async function send(path: string, init?: RequestInit, retry = true): Promise<Response> {
-  const token = apiToken();
+export function clearSession(): void {
+  sessionStorage.removeItem(SESSION_KEY);
+}
+
+export async function login(username: string, password: string): Promise<Session> {
+  const response = await fetch(`${API_URL}/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!response.ok) {
+    throw new Error(response.status === 401 ? "Invalid username or password" : `Login failed: ${response.status}`);
+  }
+  const session = (await response.json()) as Session;
+  sessionStorage.setItem(SESSION_KEY, JSON.stringify(session));
+  return session;
+}
+
+export async function logout(): Promise<void> {
+  const session = storedSession();
+  clearSession();
+  if (session) {
+    await fetch(`${API_URL}/auth/logout`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${session.token}` },
+    }).catch(() => undefined);
+  }
+}
+
+async function send(path: string, init?: RequestInit): Promise<Response> {
+  const token = storedSession()?.token ?? "";
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, ...init?.headers },
   });
-  if (response.status === 401 && retry) {
-    // Only forget the token this request used, so parallel 401s prompt once.
-    if (sessionStorage.getItem(TOKEN_KEY) === token) sessionStorage.removeItem(TOKEN_KEY);
-    return send(path, init, false);
+  if (response.status === 401) {
+    // Token expired or revoked: back to the sign-in screen.
+    clearSession();
+    window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
+    throw new Error("Session expired, sign in again");
+  }
+  if (response.status === 403) {
+    throw new Error("Your role does not allow this action");
   }
   if (!response.ok) {
     throw new Error(`API request failed: ${response.status}`);

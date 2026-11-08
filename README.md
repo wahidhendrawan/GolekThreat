@@ -80,7 +80,7 @@ docker compose up --build
 
 Open:
 
-- Web UI: http://localhost:3000 (asks once per browser session for the API token)
+- Web UI: http://localhost:3000 (sign in with the admin account from `GOLEK_ADMIN_PASSWORD`)
 - API health through frontend proxy: http://localhost:3000/api/health
 
 The API seeds sample playbooks automatically when the database is empty.
@@ -90,7 +90,10 @@ The API seeds sample playbooks automatically when the database is empty.
 Environment variables are documented in [.env.example](.env.example).
 
 - `GOLEK_API_TOKEN` (required, at least 16 characters): shared bearer token for
-  every API route except `/health`. The API refuses to start without it.
+  scripts and integrations; it acts as an admin. The API refuses to start without it.
+- `GOLEK_ADMIN_USERNAME` (default `admin`) and `GOLEK_ADMIN_PASSWORD` (at least 12
+  characters): the first web UI account, created once when the users table is empty.
+  Admins create further accounts with `POST /users`.
 - `POSTGRES_PASSWORD` (required): database password. Compose builds the API's
   `DATABASE_URL` from `POSTGRES_USER`, `POSTGRES_PASSWORD` and `POSTGRES_DB`, so use
   URL-safe characters. PostgreSQL only applies it when the volume is first created;
@@ -138,32 +141,60 @@ npm run build
 
 ## 📡 API Overview
 
-Every route except `/health` requires `Authorization: Bearer <GOLEK_API_TOKEN>`;
-requests without a valid token get `401`. Through the Docker stack, prefix paths with `/api`.
+Every route except `/health` and `/auth/login` requires `Authorization: Bearer <token>`,
+where the token is either the shared `GOLEK_API_TOKEN` (acts as an admin) or a user token
+from `POST /auth/login`. Requests without a valid token get `401`; a valid token with too
+small a role gets `403`. Through the Docker stack, prefix paths with `/api`.
+
+Roles: **viewer** reads everything; **analyst** also runs hunts (creates and edits
+playbooks, sessions, steps and evidence, deletes sessions and evidence); **admin** also
+deletes playbooks and manages users. Passwords are scrypt-hashed, tokens are stored hashed,
+expire after 30 days, and are revoked by `POST /auth/logout` or by deleting the user. Ten
+failed logins lock a username for 15 minutes (`429` with `Retry-After`).
 
 ```bash
 curl -H "Authorization: Bearer $GOLEK_API_TOKEN" http://localhost:3000/api/playbooks
+TOKEN=$(curl -s -X POST http://localhost:3000/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"'"$GOLEK_ADMIN_PASSWORD"'"}' | jq -r .token)
 ```
 
-| Method | Endpoint | Auth | Description |
+| Method | Endpoint | Role | Description |
 |---|---|---|---|
-| GET | `/health` | No | API health check |
-| GET | `/playbooks` | Yes | List all playbooks |
-| POST | `/playbooks` | Yes | Create playbook |
-| GET | `/playbooks/{id}` | Yes | Get playbook + steps + queries |
-| PUT | `/playbooks/{id}` | Yes | Update playbook |
-| DELETE | `/playbooks/{id}` | Yes | Delete playbook |
-| GET | `/sessions` | Yes | List hunt sessions |
-| POST | `/sessions` | Yes | Start hunt session from playbook |
-| GET | `/sessions/{id}` | Yes | Get session with steps and evidence |
-| PATCH | `/sessions/{id}` | Yes | Update session title/analyst/scope/status |
-| DELETE | `/sessions/{id}` | Yes | Delete session |
-| PATCH | `/session-steps/{id}` | Yes | Update step status and notes |
-| POST | `/sessions/{id}/evidence` | Yes | Add evidence item |
-| PATCH | `/evidence/{id}` | Yes | Update evidence |
-| DELETE | `/evidence/{id}` | Yes | Delete evidence |
-| GET | `/coverage` | Yes | ATT&CK coverage stats |
-| GET | `/sessions/{id}/report.md` | Yes | Markdown report |
+| GET | `/health` | none | API health check |
+| POST | `/auth/login` | none | Username + password to a bearer token |
+| POST | `/auth/logout` | viewer | Revoke the current token |
+| GET | `/auth/me` | viewer | Current username and role |
+| GET | `/users` | admin | List users |
+| POST | `/users` | admin | Create user (username, password, role) |
+| DELETE | `/users/{id}` | admin | Delete user and its tokens |
+| GET | `/playbooks` | viewer | List all playbooks |
+| POST | `/playbooks` | analyst | Create playbook |
+| GET | `/playbooks/{id}` | viewer | Get playbook + steps + queries |
+| PUT | `/playbooks/{id}` | analyst | Update playbook |
+| DELETE | `/playbooks/{id}` | admin | Delete playbook |
+| GET | `/sessions` | viewer | List hunt sessions |
+| POST | `/sessions` | analyst | Start hunt session from playbook |
+| GET | `/sessions/{id}` | viewer | Get session with steps and evidence |
+| PATCH | `/sessions/{id}` | analyst | Update session title/analyst/scope/status |
+| DELETE | `/sessions/{id}` | analyst | Delete session |
+| PATCH | `/session-steps/{id}` | analyst | Update step status and notes |
+| POST | `/sessions/{id}/evidence` | analyst | Add evidence item |
+| PATCH | `/evidence/{id}` | analyst | Update evidence |
+| DELETE | `/evidence/{id}` | analyst | Delete evidence |
+| GET | `/coverage` | viewer | ATT&CK coverage stats |
+| GET | `/sessions/{id}/report.md` | viewer | Markdown report |
+
+## Import rules from Detection-Rules
+
+`scripts/sync_detection_rules.py` turns the Sigma rules of
+[Detection-Rules](https://github.com/wahidhendrawan/Detection-Rules) into playbooks, one per
+rule, with the Sigma detection block as the hunt query:
+
+```bash
+python scripts/sync_detection_rules.py --push http://localhost:3000/api --token "$GOLEK_API_TOKEN"
+```
+
+Slugs are `dr-<rule id>`, so re-running skips rules that already exist (`409`).
 
 ## MITRE ATT&CK Catalog
 
@@ -187,6 +218,7 @@ Source: https://github.com/mitre-attack/attack-stix-data
 - `hunt_sessions`: execution instances created from playbooks.
 - `session_steps`: per-step execution status and analyst notes.
 - `evidence_items`: evidence notes and artifact references tied to sessions.
+- `users` and `user_tokens`: accounts with a role, and their hashed login tokens.
 
 ## Roadmap
 
@@ -195,7 +227,7 @@ Source: https://github.com/mitre-attack/attack-stix-data
 - ✅ Hunt session management with evidence tracking.
 - ✅ Markdown report generation.
 - ✅ Shared API token authentication.
-- ⬜ Per-user accounts and RBAC.
+- ✅ Per-user accounts and RBAC (viewer, analyst, admin).
 - ⬜ Playbook import/export as YAML.
 - ⬜ Scheduled hunt automation with cron backend.
 - ⬜ Report export to HTML/PDF.

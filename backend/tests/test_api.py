@@ -11,11 +11,11 @@ from golekthreat.db import get_db
 from golekthreat.main import app
 
 AUTH = {"Authorization": f"Bearer {settings.golek_api_token}"}
-# Every documented operation except /health, so new routes are covered automatically.
+# Every documented operation except /health and /auth/login, so new routes are covered too.
 PROTECTED = [
     (method.upper(), re.sub(r"\{[^}]+\}", "1", path))
     for path, operations in app.openapi()["paths"].items()
-    if path != "/health"
+    if path not in {"/health", "/auth/login"}
     for method in operations
 ]
 PLAYBOOK = {
@@ -86,6 +86,73 @@ def test_valid_token_is_accepted(client: TestClient) -> None:
 def test_malformed_steps_or_queries_are_422(client: TestClient, field: str, value: list) -> None:
     response = client.post("/playbooks", json=PLAYBOOK | {field: value}, headers=AUTH)
     assert response.status_code == 422
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("title", "x" * 201),
+        ("slug", ""),
+        ("hypothesis", "x" * 20_001),
+        ("steps", [{"title": "Review", "instruction": ""}]),
+        ("steps", [{"title": "", "instruction": "Inspect."}]),
+        ("queries", [{"platform": "KQL", "query": "x" * 50_001}]),
+    ],
+)
+def test_oversized_or_empty_fields_are_422(client: TestClient, field: str, value) -> None:
+    assert (
+        client.post("/playbooks", json=PLAYBOOK | {field: value}, headers=AUTH).status_code == 422
+    )
+
+
+def test_evidence_and_notes_have_size_limits(client: TestClient) -> None:
+    playbook = client.post("/playbooks", json=PLAYBOOK, headers=AUTH).json()
+    session = client.post("/sessions", json={"playbook_id": playbook["id"]}, headers=AUTH).json()
+    big = {"title": "t", "note": "x" * 20_001, "artifact_ref": ""}
+    assert (
+        client.post(f"/sessions/{session['id']}/evidence", json=big, headers=AUTH).status_code
+        == 422
+    )
+    empty = {"title": "t", "note": "", "artifact_ref": ""}
+    assert (
+        client.post(f"/sessions/{session['id']}/evidence", json=empty, headers=AUTH).status_code
+        == 422
+    )
+    step = session["steps"][0]["id"]
+    assert (
+        client.patch(
+            f"/session-steps/{step}",
+            json={"status": "running", "notes": "x" * 20_001},
+            headers=AUTH,
+        ).status_code
+        == 422
+    )
+    assert (
+        client.patch(
+            f"/session-steps/{step}",
+            json={"status": "running", "notes": "x" * 20_000},
+            headers=AUTH,
+        ).status_code
+        == 200
+    )
+
+
+def test_legacy_playbook_step_column_is_dropped_on_startup(tmp_path) -> None:
+    from sqlalchemy import create_engine, inspect, text
+
+    from golekthreat.main import drop_legacy_columns
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'old.db'}")
+    with engine.begin() as conn:
+        conn.execute(
+            text(
+                "CREATE TABLE session_steps "
+                "(id INTEGER PRIMARY KEY, playbook_step_id INTEGER, position INTEGER)"
+            )
+        )
+    drop_legacy_columns(engine)
+    drop_legacy_columns(engine)  # idempotent
+    assert [c["name"] for c in inspect(engine).get_columns("session_steps")] == ["id", "position"]
 
 
 @pytest.mark.parametrize("token", [None, "", "too-short"])

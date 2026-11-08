@@ -107,6 +107,23 @@ def test_playbook_session_evidence_lifecycle(db: Session) -> None:
     assert list_sessions(db) == []
 
 
+def test_editing_a_playbook_that_has_sessions_keeps_them(db: Session) -> None:
+    playbook = create_playbook(db, playbook_payload("gt-edit-with-session"))
+    session = start_session(db, HuntSessionCreate(playbook_id=playbook.id, analyst="a", scope="s"))
+
+    payload = PlaybookUpdate(
+        **playbook_payload("gt-edit-with-session").model_dump()
+        | {"steps": [{"title": "New step", "instruction": "Changed after the hunt started."}]}
+    )
+    updated = update_playbook(db, playbook.id, payload)
+
+    assert [step.title for step in updated.steps] == ["New step"]
+    assert [step.title for step in list_sessions(db)[0].steps] == [
+        "Review commands"
+    ]  # hunt keeps its copy
+    assert session.id == list_sessions(db)[0].id
+
+
 def test_delete_playbook_with_sessions_returns_conflict(db: Session) -> None:
     playbook = create_playbook(db, playbook_payload("gt-conflict-playbook"))
     start_session(

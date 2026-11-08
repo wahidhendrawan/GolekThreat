@@ -9,21 +9,26 @@ Usage:
     python scripts/sync_detection_rules.py --repo-url https://github.com/wahidhendrawan/Detection-Rules
     python scripts/sync_detection_rules.py --output playbooks.json
     python scripts/sync_detection_rules.py --local /path/to/Detection-Rules
+    python scripts/sync_detection_rules.py --push http://localhost:3000/api --token "$TOKEN"
 
-Output: JSON file ready for GolekThreat playbook import.
+Output: JSON file of `POST /playbooks` bodies; --push sends them to a running GolekThreat.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import shutil
+import os
+import re
 import subprocess
 import sys
 import tempfile
-import yaml
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any
+
+import yaml
 
 DEFAULT_REPO = "https://github.com/wahidhendrawan/Detection-Rules.git"
 SIGMA_DIR = "sigma"
@@ -68,37 +73,58 @@ def parse_sigma_rule(path: Path) -> dict[str, Any] | None:
         return None
 
 
-def map_sigma_to_playbook(rule: dict[str, Any]) -> dict[str, Any]:
-    """Map Sigma rule fields to GolekThreat playbook schema."""
-    title = rule.get("title", "Untitled")
-    description = rule.get("description", "")
-    tags = rule.get("tags", [])
-    level = rule.get("level", "medium")
-    logsource = rule.get("logsource", {})
-    detection = rule.get("detection", {})
+ATTACK_TECHNIQUE = re.compile(r"attack\.(t\d{4}(?:\.\d{3})?)$", re.I)
+ATTACK_TACTIC = re.compile(r"attack\.([a-z][a-z-]+)$")
 
-    # Extract MITRE ATT&CK tags
-    mitre_tags = [t for t in tags if t.startswith("attack.")]
-    mitre_techs = [t.replace("attack.", "").upper() for t in mitre_tags]
 
-    # Build playbook
+def map_sigma_to_playbook(rule: dict[str, Any], path: Path) -> dict[str, Any]:
+    """A Sigma rule as a `PlaybookCreate` body for `POST /playbooks`."""
+    tags = [str(t) for t in rule.get("tags") or []]
+    technique_id = next((m.group(1).upper() for t in tags if (m := ATTACK_TECHNIQUE.match(t))), "")
+    tactic = next(
+        (m.group(1).replace("-", " ").title() for t in tags if (m := ATTACK_TACTIC.match(t))),
+        "Unknown",
+    )
+    title = str(rule.get("title") or path.stem)
+    false_positives = rule.get("falsepositives") or ["Unknown, review needed"]
+    if not isinstance(false_positives, list):
+        false_positives = [false_positives]
+    logsource = rule.get("logsource") or {}
     return {
-        "title": f"[Detection Rule] {title}",
-        "hypothesis": f"Detect {title} — {description[:200] if description else 'No description'}",
-        "severity": map_sigma_level(level),
-        "mitre_techniques": mitre_techs,
-        "tags": [t for t in tags if not t.startswith("attack.")] + ["auto-sync", "detection-rules"],
-        "data_sources": [logsource.get("product", "unknown")],
-        "search_queries": extract_detection_queries(detection),
-        "references": rule.get("references", []),
-        "author": rule.get("author", "Detection-Rules Auto-Sync"),
-        "expected_evidence": f"Events matching {title} conditions",
-        "false_positives": rule.get("falsepositives", ["Unknown — review needed"]),
+        "slug": f"dr-{rule.get('id') or path.stem}"[:120],
+        "title": title[:200],
+        "hypothesis": str(rule.get("description") or f"Activity matching {title}").strip()[:20_000],
+        "severity": map_sigma_level(str(rule.get("level", "medium"))),
+        "tactic": tactic[:120],
+        "technique": (f"ATT&CK {technique_id}" if technique_id else "Unmapped technique")[:160],
+        "technique_id": technique_id or "unmapped",
+        "data_sources": ", ".join(f"{k}={v}" for k, v in logsource.items())[:20_000] or "unknown",
+        "expected_evidence": f"Events matching the Sigma detection of '{title}'."[:20_000],
+        "false_positives": "\n".join(str(fp) for fp in false_positives)[:20_000],
+        "response": (
+            "Validate the alert against the Sigma rule, scope the affected hosts and users, "
+            "then follow the response plan for this technique."
+        ),
         "steps": [
             {
-                "order": 1,
-                "description": f"Deploy {title} detection rule",
-                "query": generate_search_query(rule),
+                "title": "Run the detection query",
+                "instruction": (
+                    f"Execute the Sigma rule '{title[:150]}' over the hunt window "
+                    "and review every hit."
+                ),
+            },
+            {
+                "title": "Triage the matches",
+                "instruction": (
+                    "Classify each hit as evidence, false positive or no finding, "
+                    "and record notes per step."
+                ),
+            },
+        ],
+        "queries": [
+            {
+                "platform": "Sigma",
+                "query": yaml.safe_dump(rule.get("detection") or {}, sort_keys=False)[:50_000],
             }
         ],
     }
@@ -108,44 +134,51 @@ def map_sigma_level(level: str) -> str:
     return {"critical": "critical", "high": "high", "medium": "medium"}.get(level, "low")
 
 
-def extract_detection_queries(detection: dict) -> list[str]:
-    """Extract searchable patterns from Sigma detection block."""
-    queries = []
-    if isinstance(detection, dict):
-        selection = detection.get("selection", {})
-        if isinstance(selection, dict):
-            for key, value in selection.items():
-                if isinstance(value, str):
-                    queries.append(f"{key}: {value}")
-                elif isinstance(value, list):
-                    queries.append(f"{key}: {', '.join(v for v in value if isinstance(v, str))}")
-    return queries[:5]  # Limit to 5 queries
-
-
-def generate_search_query(rule: dict) -> str:
-    """Generate a basic search query from the Sigma rule."""
-    logsource = rule.get("logsource", {})
-    product = logsource.get("product", "")
-    category = logsource.get("category", "")
-
-    if product == "windows" and category == "process_creation":
-        detection = rule.get("detection", {})
-        selection = detection.get("selection", {})
-        fields = " OR ".join(
-            f"{k}=*{v}*" for k, v in selection.items()
-            if isinstance(v, str)
+def push_playbooks(playbooks: list[dict[str, Any]], api_url: str, token: str) -> tuple[int, int]:
+    """POST each playbook; an existing slug (409) is skipped. Returns (created, skipped)."""
+    created = skipped = 0
+    for playbook in playbooks:
+        request = urllib.request.Request(
+            f"{api_url.rstrip('/')}/playbooks",
+            data=json.dumps(playbook).encode(),
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {token}"},
+            method="POST",
         )
-        return f"index=windows EventID=4688 ({fields})" if fields else f"index=windows EventID=4688"
-    return f"Search for: {rule.get('title', 'unknown')}"
+        try:
+            with urllib.request.urlopen(request, timeout=30):
+                created += 1
+        except urllib.error.HTTPError as exc:
+            if exc.code == 409:
+                skipped += 1
+            else:
+                print(
+                    f"  [!] {playbook['slug']}: HTTP {exc.code} {exc.read()[:200]!r}",
+                    file=sys.stderr,
+                )
+    return created, skipped
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Sync Detection-Rules → GolekThreat playbooks")
     parser.add_argument("--repo-url", help="Detection-Rules repo URL")
     parser.add_argument("--local", help="Path to local Detection-Rules clone")
-    parser.add_argument("--output", default="playbooks_from_detection_rules.json", help="Output JSON file")
+    parser.add_argument(
+        "--output", default="playbooks_from_detection_rules.json", help="Output JSON file"
+    )
     parser.add_argument("--max", type=int, default=500, help="Max rules to sync")
+    parser.add_argument(
+        "--push",
+        metavar="API_URL",
+        help="POST the playbooks to this GolekThreat API, e.g. http://localhost:3000/api",
+    )
+    parser.add_argument(
+        "--token",
+        default=os.environ.get("GOLEK_API_TOKEN", ""),
+        help="Bearer token for --push (default: $GOLEK_API_TOKEN)",
+    )
     args = parser.parse_args()
+    if args.push and not args.token:
+        parser.error("--push needs --token or GOLEK_API_TOKEN")
 
     repo_path = clone_or_use(args.repo_url, args.local)
     sigma_path = repo_path / SIGMA_DIR
@@ -157,26 +190,28 @@ def main() -> int:
     print(f"[*] Found {len(rules)} Sigma rule files")
 
     playbooks = []
-    success = 0
-    for rule_path in rules[:args.max]:
+    for rule_path in rules[: args.max]:
         rule = parse_sigma_rule(rule_path)
         if rule is None:
             continue
         try:
-            playbook = map_sigma_to_playbook(rule)
-            playbooks.append(playbook)
-            success += 1
+            playbooks.append(map_sigma_to_playbook(rule, rule_path))
         except Exception as exc:
             print(f"  [!] Failed to map {rule_path.name}: {exc}")
 
     output = Path(args.output)
     output.write_text(
-        json.dumps({"playbooks": playbooks, "source": str(repo_path), "count": success}, indent=2),
+        json.dumps(
+            {"playbooks": playbooks, "source": str(repo_path), "count": len(playbooks)}, indent=2
+        ),
         encoding="utf-8",
     )
-
-    print(f"\n✅ Synced {success} playbooks from Detection-Rules → {output}")
-    print(f"   Import this file into GolekThreat via Admin → Import Playbooks.")
+    print(f"\n✅ Mapped {len(playbooks)} playbooks from Detection-Rules → {output}")
+    if args.push:
+        created, skipped = push_playbooks(playbooks, args.push, args.token)
+        print(f"   Pushed to {args.push}: {created} created, {skipped} already existed")
+    else:
+        print("   Push them with --push http://localhost:3000/api --token $GOLEK_API_TOKEN")
     return 0
 
 
