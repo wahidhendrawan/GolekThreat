@@ -1,8 +1,39 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
-from .models import SessionStatus, Severity, StepStatus
+from .models import Role, SessionStatus, Severity, StepStatus
+
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class LoginResponse(BaseModel):
+    token: str
+    username: str
+    role: Role
+
+
+class MeRead(BaseModel):
+    username: str
+    role: Role
+
+
+class UserCreate(BaseModel):
+    username: str = Field(min_length=3, max_length=80, pattern=r"^[A-Za-z0-9._-]+$")
+    password: str = Field(min_length=12, max_length=256)
+    role: Role = Role.viewer
+
+
+class UserRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    username: str
+    role: Role
+    created_at: datetime
 
 
 class PlaybookStepRead(BaseModel):

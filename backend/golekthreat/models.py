@@ -28,6 +28,41 @@ class SessionStatus(str, Enum):
     archived = "archived"
 
 
+class Role(str, Enum):
+    viewer = "viewer"  # read everything
+    analyst = "analyst"  # run hunts: create and edit playbooks, sessions, steps, evidence
+    admin = "admin"  # also delete playbooks and manage users
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    username: Mapped[str] = mapped_column(String(80), unique=True, index=True)
+    password_hash: Mapped[str] = mapped_column(String(200))
+    role: Mapped[Role] = mapped_column(SqlEnum(Role), default=Role.viewer)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+    tokens: Mapped[list["UserToken"]] = relationship(
+        back_populates="user", cascade="all, delete-orphan"
+    )
+
+
+class UserToken(Base):
+    __tablename__ = "user_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(UTC)
+    )
+
+    user: Mapped[User] = relationship(back_populates="tokens")
+
+
 class Playbook(Base):
     __tablename__ = "playbooks"
 
@@ -91,7 +126,9 @@ class HuntSession(Base):
     title: Mapped[str] = mapped_column(String(220))
     analyst: Mapped[str] = mapped_column(String(120), default="Unassigned")
     scope: Mapped[str] = mapped_column(Text, default="Not defined")
-    status: Mapped[SessionStatus] = mapped_column(SqlEnum(SessionStatus), default=SessionStatus.running)
+    status: Mapped[SessionStatus] = mapped_column(
+        SqlEnum(SessionStatus), default=SessionStatus.running
+    )
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC)
     )

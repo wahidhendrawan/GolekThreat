@@ -11,11 +11,11 @@ from golekthreat.db import get_db
 from golekthreat.main import app
 
 AUTH = {"Authorization": f"Bearer {settings.golek_api_token}"}
-# Every documented operation except /health, so new routes are covered automatically.
+# Every documented operation except /health and /auth/login, so new routes are covered too.
 PROTECTED = [
     (method.upper(), re.sub(r"\{[^}]+\}", "1", path))
     for path, operations in app.openapi()["paths"].items()
-    if path != "/health"
+    if path not in {"/health", "/auth/login"}
     for method in operations
 ]
 PLAYBOOK = {

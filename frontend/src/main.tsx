@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { StrictMode, type FormEvent, useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { api, type PlaybookPayload } from "./api";
+import { api, clearSession, login, logout, storedSession, UNAUTHORIZED_EVENT, type PlaybookPayload, type Session } from "./api";
 import "./styles.css";
 import type { CoverageItem, HuntSession, MitreTechnique, Playbook } from "./types";
 
@@ -655,8 +655,83 @@ function Metric({ icon, label, value }: { icon: React.ReactNode; label: string; 
   );
 }
 
+function SignIn({ onSignedIn }: { onSignedIn: (session: Session) => void }) {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    setBusy(true);
+    setError("");
+    try {
+      onSignedIn(await login(username.trim(), password));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <main className="signin">
+      <form onSubmit={submit}>
+        <h1>
+          <ShieldCheck size={22} /> GolekThreat
+        </h1>
+        <p>Sign in with the account an admin created for you.</p>
+        <label>
+          Username
+          <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" autoFocus required />
+        </label>
+        <label>
+          Password
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
+        </label>
+        {error && <p className="error">{error}</p>}
+        <button type="submit" disabled={busy}>
+          {busy ? <Loader2 size={16} className="spin" /> : "Sign in"}
+        </button>
+      </form>
+    </main>
+  );
+}
+
+function Root() {
+  const [session, setSession] = useState<Session | null>(() => storedSession());
+
+  useEffect(() => {
+    const expire = () => setSession(null);
+    window.addEventListener(UNAUTHORIZED_EVENT, expire);
+    return () => window.removeEventListener(UNAUTHORIZED_EVENT, expire);
+  }, []);
+
+  if (!session) {
+    return <SignIn onSignedIn={setSession} />;
+  }
+  const signOut = async () => {
+    await logout();
+    clearSession();
+    setSession(null);
+  };
+  return (
+    <>
+      <div className="session-bar">
+        <span>
+          Signed in as <strong>{session.username}</strong> ({session.role})
+        </span>
+        <button type="button" onClick={() => void signOut()}>
+          Sign out
+        </button>
+      </div>
+      <App />
+    </>
+  );
+}
+
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <App />
+    <Root />
   </StrictMode>,
 );
