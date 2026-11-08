@@ -179,6 +179,16 @@ def test_user_management_is_admin_only(client: TestClient, users: dict, db: Sess
     assert db.query(UserToken).join(User).filter(User.username == "analyst").count() == 0
 
 
+def test_blank_admin_password_means_no_bootstrap(monkeypatch: pytest.MonkeyPatch) -> None:
+    from golekthreat.config import Settings
+
+    monkeypatch.setenv("GOLEK_ADMIN_PASSWORD", "")
+    assert Settings(_env_file=None).golek_admin_password is None
+    monkeypatch.setenv("GOLEK_ADMIN_PASSWORD", "short")
+    with pytest.raises(ValueError):
+        Settings(_env_file=None)
+
+
 def test_bootstrap_admin_runs_once_and_only_with_a_password(
     db: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
