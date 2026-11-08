@@ -11,10 +11,23 @@ from golekthreat.config import settings
 from golekthreat.db import get_db
 from golekthreat.main import app
 from golekthreat.models import Role, User, UserToken
-from tests.test_api import AUTH as API_TOKEN
-from tests.test_api import PLAYBOOK
 
 PASSWORD = "correct-horse-battery"
+API_TOKEN = {"Authorization": f"Bearer {settings.golek_api_token}"}
+PLAYBOOK = {
+    "slug": "gt-auth-test",
+    "title": "Auth Test Playbook",
+    "hypothesis": "A test hypothesis.",
+    "tactic": "Discovery",
+    "technique": "System Information Discovery",
+    "technique_id": "T1082",
+    "data_sources": "Process telemetry",
+    "expected_evidence": "Command line evidence.",
+    "false_positives": "Administrative scripts.",
+    "response": "Validate and document.",
+    "steps": [{"title": "Review commands", "instruction": "Inspect process commands."}],
+    "queries": [{"platform": "KQL", "query": "DeviceProcessEvents | take 1"}],
+}
 
 
 @pytest.fixture()
